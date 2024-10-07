@@ -17,6 +17,7 @@ def create_connection(host_name, user_name, user_password, db_name):
 
 def execute_query(connection, query):
     cursor = connection.cursor()
+    print(query)
     try:
         cursor.execute(query)
         connection.commit()
