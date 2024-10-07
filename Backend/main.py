@@ -17,6 +17,164 @@ app.config["DEBUG"] = True # allow to show errors in browser
 def test():
     return flask.make_response(flask.jsonify("SUCCESS"), 200)
 
+# ============== PRODUCTS METHODS ============
+@app.route('/api/products', methods=['GET'])
+@app.route('/api/products/<int:resouceid>', methods=['GET'])
+def productsGet(resouceid=None):
+    query_results = None
+    try:
+        if resouceid is not None:
+            query_results = sql.execute_read_query(conn, f"""
+                SELECT * FROM Frosted_Fabrics.products
+                WHERE prod_id = {resouceid};
+            """)
+            if query_results:
+                return flask.make_response(flask.jsonify(query_results[0]), 200)
+            else:
+                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+        else:
+            query_results = sql.execute_read_query(conn, f"""
+                SELECT * FROM Frosted_Fabrics.products;
+            """)
+            return flask.make_response(flask.jsonify(query_results), 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+
+
+@app.route('/api/products', methods=['POST'])
+def productsPost():
+    request_data =  flask.request.get_json()
+    try:
+        sql.execute_query(conn, f"""
+        INSERT INTO Frosted_Fabrics.products (pc_id, prod_name, prod_cost, prod_msrp, prod_time, img_id)
+        VALUES ('{request_data['pc_id']}','{request_data['prod_name']}','{request_data['prod_cost']}','{request_data['prod_msrp']}','{request_data['prod_time']}','{request_data['img_id']}');
+    """)
+        return flask.make_response("", 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+    
+
+@app.route('/api/products/<int:resouceid>', methods=['PUT', 'PATCH'])
+def productsEdit(resouceid=None):
+    request_data =  flask.request.get_json()
+
+    # Prepares query
+    query = "UPDATE Frosted_Fabrics.products SET "
+    query_parts = []
+    if flask.request.method == 'PUT' or 'pc_id' in request_data:
+        query_parts.append(f"pc_id = '{request_data.get('pc_id', '')}'")
+    if flask.request.method == 'PUT' or 'prod_name' in request_data:
+        query_parts.append(f"prod_name = '{request_data.get('prod_name', '')}'")
+    if flask.request.method == 'PUT' or 'prod_cost' in request_data:
+        query_parts.append(f"prod_cost = '{request_data.get('prod_cost', '')}'")
+    if flask.request.method == 'PUT' or 'prod_msrp' in request_data:
+        query_parts.append(f"prod_msrp = '{request_data.get('prod_msrp', '')}'")
+    if flask.request.method == 'PUT' or 'prod_name' in request_data:
+        query_parts.append(f"prod_time = '{request_data.get('prod_time', '')}'")
+    if flask.request.method == 'PUT' or 'img_id' in request_data:
+        query_parts.append(f"img_id = '{request_data.get('img_id', '')}'")
+
+    if query_parts:
+        query += ", ".join(query_parts)
+        query += f" WHERE prod_id = {resouceid};"
+
+    try:
+        sql.execute_query(conn, query)
+        return flask.make_response("", 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+
+
+@app.route('/api/products/<int:resouceid>', methods=['DELETE'])
+def productsDelete(resouceid=None):
+    try:
+        query_results = sql.execute_query(conn, f"""
+            DELETE FROM Frosted_Fabrics.products
+            WHERE prod_id = {resouceid};
+        """)
+        return flask.make_response(flask.jsonify(query_results), 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+
+
+# ============== PRODUCT VARIATIONS METHODS ============
+@app.route('/api/productvariations', methods=['GET'])
+@app.route('/api/productvariations/<int:resouceid>', methods=['GET'])
+def productvariationsGet(resouceid=None):
+    query_results = None
+    try:
+        if resouceid is not None:
+            query_results = sql.execute_read_query(conn, f"""
+                SELECT * FROM Frosted_Fabrics.product_variations
+                WHERE var_id = {resouceid};
+            """)
+            if query_results:
+                return flask.make_response(flask.jsonify(query_results[0]), 200)
+            else:
+                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+        else:
+            query_results = sql.execute_read_query(conn, f"""
+                SELECT * FROM Frosted_Fabrics.product_variations;
+            """)
+            return flask.make_response(flask.jsonify(query_results), 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+
+
+@app.route('/api/productvariations', methods=['POST'])
+def productvariationsPost():
+    request_data =  flask.request.get_json()
+    try:
+        sql.execute_query(conn, f"""
+        INSERT INTO Frosted_Fabrics.product_variations (prod_id, var_name, var_inv, var_goal, img_id)
+        VALUES ('{request_data['prod_id']}','{request_data['var_name']}','{request_data['var_inv']}','{request_data['var_goal']}','{request_data['img_id']}');
+    """)
+        return flask.make_response("", 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+    
+
+@app.route('/api/productvariations/<int:resouceid>', methods=['PUT', 'PATCH'])
+def productvariationsEdit(resouceid=None):
+    request_data =  flask.request.get_json()
+
+    # Prepares query
+    query = "UPDATE Frosted_Fabrics.product_variations SET "
+    query_parts = []
+    if flask.request.method == 'PUT' or 'prod_id' in request_data:
+        query_parts.append(f"prod_id = '{request_data.get('prod_id', '')}'")
+    if flask.request.method == 'PUT' or 'var_name' in request_data:
+        query_parts.append(f"var_name = '{request_data.get('var_name', '')}'")
+    if flask.request.method == 'PUT' or 'var_inv' in request_data:
+        query_parts.append(f"var_inv = '{request_data.get('var_inv', '')}'")
+    if flask.request.method == 'PUT' or 'var_goal' in request_data:
+        query_parts.append(f"var_goal = '{request_data.get('var_goal', '')}'")
+    if flask.request.method == 'PUT' or 'img_id' in request_data:
+        query_parts.append(f"img_id = '{request_data.get('img_id', '')}'")
+
+    if query_parts:
+        query += ", ".join(query_parts)
+        query += f" WHERE var_id = {resouceid};"
+
+    try:
+        sql.execute_query(conn, query)
+        return flask.make_response("", 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+
+
+@app.route('/api/productvariations/<int:resouceid>', methods=['DELETE'])
+def productvariationsDelete(resouceid=None):
+    try:
+        query_results = sql.execute_query(conn, f"""
+            DELETE FROM Frosted_Fabrics.product_variations
+            WHERE var_id = {resouceid};
+        """)
+        return flask.make_response(flask.jsonify(query_results), 200)
+    except:
+        return flask.make_response("Internal Server Error",500)
+    
+
 # ============== PRODUCT CATEGORIES METHODS ============
 @app.route('/api/productcategories', methods=['GET'])
 @app.route('/api/productcategories/<int:resouceid>', methods=['GET'])
@@ -161,8 +319,223 @@ def materialcategoriesDelete(resouceid=None):
     except:
         return flask.make_response("Internal Server Error",500)
 
+# # ============== MATERIAL BRANDS METHODS ============
+# @app.route('/api/materialcategories', methods=['GET'])
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['GET'])
+# def materialcategoriesGet(resouceid=None):
+#     query_results = None
+#     try:
+#         if resouceid is not None:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories
+#                 WHERE mc_id = {resouceid};
+#             """)
+#             if query_results:
+#                 return flask.make_response(flask.jsonify(query_results[0]), 200)
+#             else:
+#                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+#         else:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories;
+#             """)
+#             return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
 
 
+# @app.route('/api/materialcategories', methods=['POST'])
+# def materialcategoriesPost():
+#      request_data =  flask.request.get_json()
+#      try:
+#          sql.execute_query(conn, f"""
+#          INSERT INTO Frosted_Fabrics.material_categories (meas_id, mc_name, img_id)
+#          VALUES ('{request_data['meas_id']}','{request_data['mc_name']}','{request_data['img_id']}');
+#      """)
+#          return flask.make_response("", 200)
+#      except:
+#          return flask.make_response("Internal Server Error",500)
+    
 
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['PUT', 'PATCH'])
+# def materialcategoriesEdit(resouceid=None):
+#     request_data =  flask.request.get_json()
+
+#     # Prepares query
+#     query = "UPDATE Frosted_Fabrics.material_categories SET "
+#     query_parts = []
+#     if flask.request.method == 'PUT' or 'meas_id' in request_data:
+#         query_parts.append(f"meas_id = '{request_data.get('meas_id', '')}'")
+#     if flask.request.method == 'PUT' or 'mc_name' in request_data:
+#         query_parts.append(f"mc_name = '{request_data.get('mc_name', '')}'")
+#     if flask.request.method == 'PUT' or 'img_id' in request_data:
+#         query_parts.append(f"img_id = '{request_data.get('img_id', '')}'")
+
+#     if query_parts:
+#         query += ", ".join(query_parts)
+#         query += f" WHERE mc_id = {resouceid};"
+
+#     try:
+#         sql.execute_query(conn, query)
+#         return flask.make_response("", 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['DELETE'])
+# def materialcategoriesDelete(resouceid=None):
+#     try:
+#         query_results = sql.execute_query(conn, f"""
+#             DELETE FROM Frosted_Fabrics.material_categories
+#             WHERE mc_id = {resouceid};
+#         """)
+#         return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+# # ============== MATERIALS METHODS ============
+# @app.route('/api/materialcategories', methods=['GET'])
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['GET'])
+# def materialcategoriesGet(resouceid=None):
+#     query_results = None
+#     try:
+#         if resouceid is not None:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories
+#                 WHERE mc_id = {resouceid};
+#             """)
+#             if query_results:
+#                 return flask.make_response(flask.jsonify(query_results[0]), 200)
+#             else:
+#                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+#         else:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories;
+#             """)
+#             return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+
+# @app.route('/api/materialcategories', methods=['POST'])
+# def materialcategoriesPost():
+#      request_data =  flask.request.get_json()
+#      try:
+#          sql.execute_query(conn, f"""
+#          INSERT INTO Frosted_Fabrics.material_categories (meas_id, mc_name, img_id)
+#          VALUES ('{request_data['meas_id']}','{request_data['mc_name']}','{request_data['img_id']}');
+#      """)
+#          return flask.make_response("", 200)
+#      except:
+#          return flask.make_response("Internal Server Error",500)
+    
+
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['PUT', 'PATCH'])
+# def materialcategoriesEdit(resouceid=None):
+#     request_data =  flask.request.get_json()
+
+#     # Prepares query
+#     query = "UPDATE Frosted_Fabrics.material_categories SET "
+#     query_parts = []
+#     if flask.request.method == 'PUT' or 'meas_id' in request_data:
+#         query_parts.append(f"meas_id = '{request_data.get('meas_id', '')}'")
+#     if flask.request.method == 'PUT' or 'mc_name' in request_data:
+#         query_parts.append(f"mc_name = '{request_data.get('mc_name', '')}'")
+#     if flask.request.method == 'PUT' or 'img_id' in request_data:
+#         query_parts.append(f"img_id = '{request_data.get('img_id', '')}'")
+
+#     if query_parts:
+#         query += ", ".join(query_parts)
+#         query += f" WHERE mc_id = {resouceid};"
+
+#     try:
+#         sql.execute_query(conn, query)
+#         return flask.make_response("", 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['DELETE'])
+# def materialcategoriesDelete(resouceid=None):
+#     try:
+#         query_results = sql.execute_query(conn, f"""
+#             DELETE FROM Frosted_Fabrics.material_categories
+#             WHERE mc_id = {resouceid};
+#         """)
+#         return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+# # ============== VARIATION MATERIALS METHODS ============
+# @app.route('/api/materialcategories', methods=['GET'])
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['GET'])
+# def materialcategoriesGet(resouceid=None):
+#     query_results = None
+#     try:
+#         if resouceid is not None:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories
+#                 WHERE mc_id = {resouceid};
+#             """)
+#             if query_results:
+#                 return flask.make_response(flask.jsonify(query_results[0]), 200)
+#             else:
+#                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+#         else:
+#             query_results = sql.execute_read_query(conn, f"""
+#                 SELECT * FROM Frosted_Fabrics.material_categories;
+#             """)
+#             return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+
+# @app.route('/api/materialcategories', methods=['POST'])
+# def materialcategoriesPost():
+#      request_data =  flask.request.get_json()
+#      try:
+#          sql.execute_query(conn, f"""
+#          INSERT INTO Frosted_Fabrics.material_categories (meas_id, mc_name, img_id)
+#          VALUES ('{request_data['meas_id']}','{request_data['mc_name']}','{request_data['img_id']}');
+#      """)
+#          return flask.make_response("", 200)
+#      except:
+#          return flask.make_response("Internal Server Error",500)
+    
+
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['PUT', 'PATCH'])
+# def materialcategoriesEdit(resouceid=None):
+#     request_data =  flask.request.get_json()
+
+#     # Prepares query
+#     query = "UPDATE Frosted_Fabrics.material_categories SET "
+#     query_parts = []
+#     if flask.request.method == 'PUT' or 'meas_id' in request_data:
+#         query_parts.append(f"meas_id = '{request_data.get('meas_id', '')}'")
+#     if flask.request.method == 'PUT' or 'mc_name' in request_data:
+#         query_parts.append(f"mc_name = '{request_data.get('mc_name', '')}'")
+#     if flask.request.method == 'PUT' or 'img_id' in request_data:
+#         query_parts.append(f"img_id = '{request_data.get('img_id', '')}'")
+
+#     if query_parts:
+#         query += ", ".join(query_parts)
+#         query += f" WHERE mc_id = {resouceid};"
+
+#     try:
+#         sql.execute_query(conn, query)
+#         return flask.make_response("", 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
+
+
+# @app.route('/api/materialcategories/<int:resouceid>', methods=['DELETE'])
+# def materialcategoriesDelete(resouceid=None):
+#     try:
+#         query_results = sql.execute_query(conn, f"""
+#             DELETE FROM Frosted_Fabrics.material_categories
+#             WHERE mc_id = {resouceid};
+#         """)
+#         return flask.make_response(flask.jsonify(query_results), 200)
+#     except:
+#         return flask.make_response("Internal Server Error",500)
 
 app.run()
