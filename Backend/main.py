@@ -411,7 +411,7 @@ def materialsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.material_categories;
+                SELECT * FROM Frosted_Fabrics.materials;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
