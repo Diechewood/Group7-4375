@@ -9,7 +9,15 @@ conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.
 
 # setting up an application name
 app = flask.Flask(__name__) # sets up the application
-app.config["DEBUG"] = True # allow to show errors in browser
+app.config["DEBUG"] = False # allow to show errors in browser
+
+# Enable CORS for all routes
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "*")
+    response.headers.add("Access-Control-Allow-Methods", "*")
+    return response
 
 # ============== EXAMPLE METHODS ============
 # Set up back end routes
@@ -543,5 +551,6 @@ def variationmaterialsDelete(resouceid=None):
         return flask.make_response(flask.jsonify(query_results), 200)
     except:
         return flask.make_response("Internal Server Error",500)
+
 
 app.run()
