@@ -22,7 +22,7 @@ interface Brand {
   brand_id: number
   mc_id: number
   brand_name: string
-  brand_price: number
+  brand_price: number | string
   img_id: string | null
 }
 
@@ -36,22 +36,35 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    setIsLoading(true)
-    Promise.all([
-      fetch('http://localhost:5000/api/materials'),
-      fetch('http://localhost:5000/api/materialbrands')
-    ])
-      .then(([materialsRes, brandsRes]) => Promise.all([materialsRes.json(), brandsRes.json()]))
-      .then(([materialsData, brandsData]) => {
+    const fetchData = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const [materialsRes, brandsRes] = await Promise.all([
+          fetch('http://localhost:5000/api/materials'),
+          fetch('http://localhost:5000/api/materialbrands')
+        ])
+        
+        if (!materialsRes.ok || !brandsRes.ok) {
+          throw new Error('Failed to fetch data')
+        }
+
+        const [materialsData, brandsData] = await Promise.all([
+          materialsRes.json(),
+          brandsRes.json()
+        ])
+
         setMaterials(materialsData)
         setBrands(brandsData)
-        setIsLoading(false)
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Error fetching data:', error)
         setError('Failed to load materials. Please try again later.')
+      } finally {
         setIsLoading(false)
-      })
+      }
+    }
+
+    fetchData()
   }, [])
 
   const filteredMaterials = materials.filter(material => {
@@ -130,7 +143,11 @@ export default function CategoryPage() {
                         <td className="p-2">{material.mat_sku}</td>
                         <td className="p-2">{material.mat_inv}</td>
                         <td className="p-2">{material.mat_alert}</td>
-                        <td className="p-2">{brand ? `$${brand.brand_price.toFixed(2)}` : ''}</td>
+                        <td className="p-2">
+                          {brand && typeof brand.brand_price === 'number'
+                            ? `$${brand.brand_price.toFixed(2)}`
+                            : brand?.brand_price || ''}
+                        </td>
                       </tr>
                     )
                   })}

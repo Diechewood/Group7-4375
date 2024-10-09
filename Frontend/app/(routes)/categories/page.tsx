@@ -21,23 +21,25 @@ export default function CategoriesPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    setIsLoading(true)
-    fetch('http://localhost:5000/api/materialcategories')
-      .then(response => {
+    const fetchCategories = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const response = await fetch('http://localhost:5000/api/materialcategories')
         if (!response.ok) {
           throw new Error('Failed to fetch categories')
         }
-        return response.json()
-      })
-      .then(data => {
+        const data = await response.json()
         setCategories(data)
-        setIsLoading(false)
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Error fetching categories:', error)
         setError('Failed to load categories. Please try again later.')
+      } finally {
         setIsLoading(false)
-      })
+      }
+    }
+
+    fetchCategories()
   }, [])
 
   const filteredCategories = categories.filter(category => 
