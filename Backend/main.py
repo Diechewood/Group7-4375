@@ -553,4 +553,4 @@ def variationmaterialsDelete(resouceid=None):
         return flask.make_response("Internal Server Error",500)
 
 
-app.run()
+app.run(threaded=True)
