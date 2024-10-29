@@ -33,7 +33,7 @@ def productsGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.products
+                SELECT * FROM frostedfabrics.products
                 WHERE prod_id = {resouceid};
             """)
             if query_results:
@@ -42,7 +42,7 @@ def productsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.products;
+                SELECT * FROM frostedfabrics.products;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -54,7 +54,7 @@ def productsPost():
     request_data =  flask.request.get_json()
     try:
         sql.execute_query(conn, f"""
-        INSERT INTO Frosted_Fabrics.products (pc_id, prod_name, prod_cost, prod_msrp, prod_time, img_id)
+        INSERT INTO frostedfabrics.products (pc_id, prod_name, prod_cost, prod_msrp, prod_time, img_id)
         VALUES ('{request_data['pc_id']}','{request_data['prod_name']}','{request_data['prod_cost']}','{request_data['prod_msrp']}','{request_data['prod_time']}','{request_data['img_id']}');
     """)
         return flask.make_response("", 200)
@@ -67,7 +67,7 @@ def productsEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.products SET "
+    query = "UPDATE frostedfabrics.products SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'pc_id' in request_data:
         query_parts.append(f"pc_id = '{request_data.get('pc_id', '')}'")
@@ -97,7 +97,7 @@ def productsEdit(resouceid=None):
 def productsDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.products
+            DELETE FROM frostedfabrics.products
             WHERE prod_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -113,7 +113,7 @@ def productvariationsGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.product_variations
+                SELECT * FROM frostedfabrics.product_variations
                 WHERE var_id = {resouceid};
             """)
             if query_results:
@@ -122,7 +122,7 @@ def productvariationsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.product_variations;
+                SELECT * FROM frostedfabrics.product_variations;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -134,7 +134,7 @@ def productvariationsPost():
     request_data =  flask.request.get_json()
     try:
         sql.execute_query(conn, f"""
-        INSERT INTO Frosted_Fabrics.product_variations (prod_id, var_name, var_inv, var_goal, img_id)
+        INSERT INTO frostedfabrics.product_variations (prod_id, var_name, var_inv, var_goal, img_id)
         VALUES ('{request_data['prod_id']}','{request_data['var_name']}','{request_data['var_inv']}','{request_data['var_goal']}','{request_data['img_id']}');
     """)
         return flask.make_response("", 200)
@@ -147,7 +147,7 @@ def productvariationsEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.product_variations SET "
+    query = "UPDATE frostedfabrics.product_variations SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'prod_id' in request_data:
         query_parts.append(f"prod_id = '{request_data.get('prod_id', '')}'")
@@ -175,7 +175,7 @@ def productvariationsEdit(resouceid=None):
 def productvariationsDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.product_variations
+            DELETE FROM frostedfabrics.product_variations
             WHERE var_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -191,7 +191,7 @@ def productcategoriesGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.product_categories
+                SELECT * FROM frostedfabrics.product_categories
                 WHERE pc_id = {resouceid};
             """)
             if query_results:
@@ -200,7 +200,7 @@ def productcategoriesGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.product_categories;
+                SELECT * FROM frostedfabrics.product_categories;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -212,7 +212,7 @@ def productcategoriesPost():
     request_data =  flask.request.get_json()
     try:
         sql.execute_query(conn, f"""
-        INSERT INTO Frosted_Fabrics.product_categories (pc_name, img_id)
+        INSERT INTO frostedfabrics.product_categories (pc_name, img_id)
         VALUES ('{request_data['pc_name']}','{request_data['img_id']}');
     """)
         return flask.make_response("", 200)
@@ -225,7 +225,7 @@ def productcategoriesEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.product_categories SET "
+    query = "UPDATE frostedfabrics.product_categories SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'pc_name' in request_data:
         query_parts.append(f"pc_name = '{request_data.get('pc_name', '')}'")
@@ -247,7 +247,7 @@ def productcategoriesEdit(resouceid=None):
 def productcategoriesDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.product_categories
+            DELETE FROM frostedfabrics.product_categories
             WHERE pc_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -262,7 +262,7 @@ def materialcategoriesGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.material_categories
+                SELECT * FROM frostedfabrics.material_categories
                 WHERE mc_id = {resouceid};
             """)
             if query_results:
@@ -271,7 +271,7 @@ def materialcategoriesGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.material_categories;
+                SELECT * FROM frostedfabrics.material_categories;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -283,7 +283,7 @@ def materialcategoriesPost():
      request_data =  flask.request.get_json()
      try:
          sql.execute_query(conn, f"""
-         INSERT INTO Frosted_Fabrics.material_categories (meas_id, mc_name, img_id)
+         INSERT INTO frostedfabrics.material_categories (meas_id, mc_name, img_id)
          VALUES ('{request_data['meas_id']}','{request_data['mc_name']}','{request_data['img_id']}');
      """)
          return flask.make_response("", 200)
@@ -296,7 +296,7 @@ def materialcategoriesEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.material_categories SET "
+    query = "UPDATE frostedfabrics.material_categories SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'meas_id' in request_data:
         query_parts.append(f"meas_id = '{request_data.get('meas_id', '')}'")
@@ -320,7 +320,7 @@ def materialcategoriesEdit(resouceid=None):
 def materialcategoriesDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.material_categories
+            DELETE FROM frostedfabrics.material_categories
             WHERE mc_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -335,7 +335,7 @@ def materialbrandsGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.material_brands
+                SELECT * FROM frostedfabrics.material_brands
                 WHERE brand_id = {resouceid};
             """)
             if query_results:
@@ -344,7 +344,7 @@ def materialbrandsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.material_brands;
+                SELECT * FROM frostedfabrics.material_brands;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -356,7 +356,7 @@ def materialbrandsPost():
      request_data =  flask.request.get_json()
      try:
          sql.execute_query(conn, f"""
-         INSERT INTO Frosted_Fabrics.material_brands (mc_id, brand_name, brand_price, img_id)
+         INSERT INTO frostedfabrics.material_brands (mc_id, brand_name, brand_price, img_id)
          VALUES ('{request_data['mc_id']}','{request_data['brand_name']}','{request_data['brand_price']}','{request_data['img_id']}');
      """)
          return flask.make_response("", 200)
@@ -369,7 +369,7 @@ def materialbrandsEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.material_brands SET "
+    query = "UPDATE frostedfabrics.material_brands SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'mc_id' in request_data:
         query_parts.append(f"mc_id = '{request_data.get('mc_id', '')}'")
@@ -395,7 +395,7 @@ def materialbrandsEdit(resouceid=None):
 def materialbrandsDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.material_brands
+            DELETE FROM frostedfabrics.material_brands
             WHERE brand_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -410,7 +410,7 @@ def materialsGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.materials
+                SELECT * FROM frostedfabrics.materials
                 WHERE mat_id = {resouceid};
             """)
             if query_results:
@@ -419,7 +419,7 @@ def materialsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.materials;
+                SELECT * FROM frostedfabrics.materials;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -431,7 +431,7 @@ def materialsPost():
      request_data =  flask.request.get_json()
      try:
          sql.execute_query(conn, f"""
-         INSERT INTO Frosted_Fabrics.materials (brand_id, mat_name, mat_sku, mat_inv, mat_alert, img_id)
+         INSERT INTO frostedfabrics.materials (brand_id, mat_name, mat_sku, mat_inv, mat_alert, img_id)
          VALUES ('{request_data['brand_id']}','{request_data['mat_name']}','{request_data['mat_sku']}','{request_data['mat_inv']}','{request_data['mat_alert']}','{request_data['img_id']}');
      """)
          return flask.make_response("", 200)
@@ -444,7 +444,7 @@ def materialsEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.materials SET "
+    query = "UPDATE frostedfabrics.materials SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'brand_id' in request_data:
         query_parts.append(f"brand_id = '{request_data.get('brand_id', '')}'")
@@ -474,7 +474,7 @@ def materialsEdit(resouceid=None):
 def materialsDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.materials
+            DELETE FROM frostedfabrics.materials
             WHERE mat_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
@@ -489,7 +489,7 @@ def variationmaterialsGet(resouceid=None):
     try:
         if resouceid is not None:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.variation_materials
+                SELECT * FROM frostedfabrics.variation_materials
                 WHERE var_id = {resouceid};
             """)
             if query_results:
@@ -498,7 +498,7 @@ def variationmaterialsGet(resouceid=None):
                 return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
         else:
             query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM Frosted_Fabrics.variation_materials;
+                SELECT * FROM frostedfabrics.variation_materials;
             """)
             return flask.make_response(flask.jsonify(query_results), 200)
     except:
@@ -510,7 +510,7 @@ def variationmaterialsPost():
      request_data =  flask.request.get_json()
      try:
          sql.execute_query(conn, f"""
-         INSERT INTO Frosted_Fabrics.variation_materials (mat_id, mat_amount)
+         INSERT INTO frostedfabrics.variation_materials (mat_id, mat_amount)
          VALUES ('{request_data['mat_id']}','{request_data['mat_amount']}');
      """)
          return flask.make_response("", 200)
@@ -523,7 +523,7 @@ def variationmaterialsEdit(resouceid=None):
     request_data =  flask.request.get_json()
 
     # Prepares query
-    query = "UPDATE Frosted_Fabrics.variation_materials SET "
+    query = "UPDATE frostedfabrics.variation_materials SET "
     query_parts = []
     if flask.request.method == 'PUT' or 'mat_id' in request_data:
         query_parts.append(f"mat_id = '{request_data.get('mat_id', '')}'")
@@ -545,7 +545,7 @@ def variationmaterialsEdit(resouceid=None):
 def variationmaterialsDelete(resouceid=None):
     try:
         query_results = sql.execute_query(conn, f"""
-            DELETE FROM Frosted_Fabrics.variation_materials
+            DELETE FROM frostedfabrics.variation_materials
             WHERE var_id = {resouceid};
         """)
         return flask.make_response(flask.jsonify(query_results), 200)
