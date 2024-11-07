@@ -16,24 +16,31 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname()
 
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === href
+    }
+    return pathname.startsWith(href)
+  }
+
   return (
     <aside className="w-64 bg-purple-200 p-4 fixed top-16 left-0 bottom-0 overflow-y-auto z-40">
       <nav>
         <ul className="space-y-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const active = isActive(item.href)
             return (
               <li key={item.href}>
                 <Link href={item.href} passHref legacyBehavior>
                   <Button
                     variant="ghost"
                     className={`w-full justify-start ${
-                      isActive
+                      active
                         ? 'bg-purple-300 text-purple-700'
                         : 'text-gray-800 hover:text-purple-700'
                     }`}
                     onClick={(e) => {
-                      if (isActive) {
+                      if (active) {
                         e.preventDefault()
                         window.location.href = item.href
                       }
