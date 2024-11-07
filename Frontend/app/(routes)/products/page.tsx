@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Search, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
 
 interface Category {
   pc_id: number
@@ -18,6 +19,9 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [newCategoryName, setNewCategoryName] = useState("")
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchCategories = async (retries = 3) => {
@@ -49,6 +53,54 @@ export default function ProductsPage() {
   const filteredCategories = categories.filter(category => 
     category.pc_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast({
+        title: "Error",
+        description: "Category name cannot be empty",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/productcategories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pc_name: newCategoryName,
+          img_id: null
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to add category')
+      }
+
+      toast({
+        title: "Success",
+        description: "Category added successfully",
+      })
+
+      // Refresh categories
+      const categoriesResponse = await fetch('http://localhost:5000/api/productcategories')
+      const categoriesData = await categoriesResponse.json()
+      setCategories(categoriesData)
+
+      setNewCategoryName("")
+      setIsAddingCategory(false)
+    } catch (error) {
+      console.error('Error adding category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add category. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <div className="h-full p-6">
@@ -84,12 +136,32 @@ export default function ProductsPage() {
               </Card>
             </Link>
           ))}
-          <Button 
-            variant="outline" 
-            className="h-full min-h-[100px] flex items-center justify-center border-dashed border-2"
-          >
-            <Plus className="mr-2" /> Add New Category
-          </Button>
+          {isAddingCategory ? (
+            <Card className="flex flex-col items-center justify-center p-4">
+              <Input
+                type="text"
+                placeholder="New category name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="mb-2"
+              />
+              <div className="flex space-x-2">
+                <Button onClick={handleAddCategory} className="bg-[#464B95] hover:bg-[#363875] text-white">
+                  Add
+                </Button>
+                <Button onClick={() => setIsAddingCategory(false)} variant="outline">
+                  Cancel
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Button 
+              onClick={() => setIsAddingCategory(true)}
+              className="h-full min-h-[100px] flex items-center justify-center border-dashed border-2 bg-[#464B95] hover:bg-[#363875] text-white"
+            >
+              <Plus className="mr-2" /> Add New Category
+            </Button>
+          )}
         </div>
       )}
     </div>
