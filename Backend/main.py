@@ -7,7 +7,8 @@ import sql
 import creds
 import traceback
 from urllib.parse import unquote
-
+import time
+import mysql.connector
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -19,6 +20,22 @@ conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.
 # setting up an application name
 app = flask.Flask(__name__) # sets up the application
 app.config["DEBUG"] = False # allow to show errors in browser
+
+# Function to create a database connection with retry mechanism
+def get_db_connection():
+    max_retries = 3
+    retry_delay = 1  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.Creds.password, creds.Creds.dbName)
+            return conn
+        except mysql.connector.Error as err:
+            logger.error(f"Database connection attempt {attempt + 1} failed: {err}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise
 
 # Enable CORS for all routes
 @app.after_request
@@ -416,7 +433,10 @@ def materialbrandsDelete(resouceid=None):
 @app.route('/api/materials/<int:resouceid>', methods=['GET'])
 def materialsGet(resouceid=None):
     query_results = None
+    conn = None
     try:
+        conn = get_db_connection()
+        
         if resouceid is not None:
             query = "SELECT * FROM frostedfabrics.materials WHERE mat_id = %s"
             params = (resouceid,)
@@ -440,7 +460,7 @@ def materialsGet(resouceid=None):
             logger.error("Query returned None")
             return make_response(jsonify({"error": "Database query failed"}), 500)
         
-        logger.info(f"Query results: {query_results}")
+        logger.info(f"Query results count: {len(query_results)}")
         
         if resouceid is not None:
             return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
@@ -450,6 +470,9 @@ def materialsGet(resouceid=None):
         logger.error(f"Error in materialsGet: {str(e)}")
         logger.error(traceback.format_exc())
         return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/api/materials', methods=['POST'])
 def materialsPost():
