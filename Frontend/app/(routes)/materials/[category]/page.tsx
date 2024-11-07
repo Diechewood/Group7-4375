@@ -232,7 +232,8 @@ export default function CategoryPage() {
       for (const [materialId, material] of Object.entries(editedMaterials)) {
         if (materials.find(m => m.mat_id === parseInt(materialId))?.mat_name !== material.mat_name ||
             materials.find(m => m.mat_id === parseInt(materialId))?.mat_sku !== material.mat_sku ||
-            materials.find(m => m.mat_id === parseInt(materialId))?.mat_alert !== material.mat_alert) {
+            materials.find(m => m.mat_id === parseInt(materialId))?.mat_alert !== material.mat_alert ||
+            materials.find(m => m.mat_id === parseInt(materialId))?.mat_inv !== material.mat_inv) {
           updates.push(
             fetch(`http://localhost:5000/api/materials/${materialId}`, {
               method: 'PATCH',
@@ -240,7 +241,8 @@ export default function CategoryPage() {
               body: JSON.stringify({
                 mat_name: material.mat_name,
                 mat_sku: material.mat_sku,
-                mat_alert: material.mat_alert
+                mat_alert: material.mat_alert,
+                mat_inv: material.mat_inv
               })
             })
           )
@@ -314,15 +316,13 @@ export default function CategoryPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="mb-6 flex justify-between items-center">
-        <div className="flex items-center">
-          <Button variant="ghost" className="mr-2 text-gray-800" onClick={() => router.push('/materials')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="text-3xl font-bold text-gray-800">{decodedCategory}</h1>
-        </div>
-        <div className="flex items-center space-x-2">
+      <div className="mb-6">
+        <Button variant="ghost" className="mb-2 text-gray-800" onClick={() => router.push('/materials')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-3xl font-bold text-gray-800 mt-2">{decodedCategory}</h1>
+        <div className="flex justify-end items-center space-x-2 mt-4">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-600" />
             <Input
@@ -364,7 +364,7 @@ export default function CategoryPage() {
             <Button 
               variant="outline" 
               onClick={handleStartEdit}
-              className="text-gray-800 border-gray-300"
+              className="text-gray-800 border-black"
             >
               <Pencil className="h-4 w-4 mr-2" />
               Edit Values
@@ -403,7 +403,9 @@ export default function CategoryPage() {
                 <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">#</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">Inv (oz)</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
+                {!isEditMode && (
+                  <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
+                )}
                 <th className="p-2 text-gray-800 text-left font-semibold">Alert(oz)</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">$</th>
               </tr>
@@ -420,11 +422,11 @@ export default function CategoryPage() {
                   <Fragment key={brandId}>
                     <tr 
                       className={`border-b border-gray-300 ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
-                      onClick={() => hasMultipleMaterials && !isEditMode && toggleBrand(brandId)}
+                      onClick={() => hasMultipleMaterials && toggleBrand(brandId)}
                     >
                       <td className="p-2" colSpan={hasMultipleMaterials ? 5 : 1}>
                         <div className="flex items-center">
-                          {hasMultipleMaterials && !isEditMode && (
+                          {hasMultipleMaterials && (
                             isExpanded ? (
                               <ChevronDown className="h-4 w-4 mr-2 text-gray-600" />
                             ) : (
@@ -435,7 +437,7 @@ export default function CategoryPage() {
                             <Input
                               value={editedBrand?.brand_name || ''}
                               onChange={(e) => handleBrandEdit(brandId, 'brand_name', e.target.value)}
-                              className="w-full max-w-[200px]"
+                              className="w-full max-w-[200px] text-gray-800"
                             />
                           ) : (
                             <span className="font-medium text-gray-800">
@@ -451,22 +453,33 @@ export default function CategoryPage() {
                               <Input
                                 value={editedMaterials[materialsForBrand[0].mat_id]?.mat_sku || materialsForBrand[0].mat_sku}
                                 onChange={(e) => handleMaterialEdit(materialsForBrand[0].mat_id, 'mat_sku', e.target.value)}
-                                className="w-full max-w-[100px]"
+                                className="w-full max-w-[100px] text-gray-800"
                               />
                             ) : (
                               materialsForBrand[0].mat_sku
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_inv}</td>
                           <td className="p-2 text-gray-800">
-                            {!isEditMode && (
-                              editingInventory[materialsForBrand[0].mat_id] !== undefined ? (
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedMaterials[materialsForBrand[0].mat_id]?.mat_inv || materialsForBrand[0].mat_inv}
+                                onChange={(e) => handleMaterialEdit(materialsForBrand[0].mat_id, 'mat_inv', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px] text-gray-800"
+                              />
+                            ) : (
+                              materialsForBrand[0].mat_inv
+                            )}
+                          </td>
+                          {!isEditMode && (
+                            <td className="p-2 text-gray-800">
+                              {editingInventory[materialsForBrand[0].mat_id] !== undefined ? (
                                 <div className="flex items-center">
                                   <Input
                                     type="number"
                                     value={editingInventory[materialsForBrand[0].mat_id]}
                                     onChange={(e) => setEditingInventory(prev => ({ ...prev, [materialsForBrand[0].mat_id]: e.target.value }))}
-                                    className="w-20 mr-2"
+                                    className="w-20 mr-2 text-gray-800"
                                   />
                                   <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(materialsForBrand[0].mat_id)}>
                                     <Check className="h-4 w-4 text-green-600" />
@@ -479,37 +492,37 @@ export default function CategoryPage() {
                                 <Button size="sm" variant="ghost" onClick={() => handleEditInventory(materialsForBrand[0].mat_id, materialsForBrand[0].mat_inv)}>
                                   Edit
                                 </Button>
-                              )
-                            )}
-                          </td>
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 text-gray-800">
                             {isEditMode ? (
                               <Input
                                 type="number"
                                 value={editedMaterials[materialsForBrand[0].mat_id]?.mat_alert || materialsForBrand[0].mat_alert}
                                 onChange={(e) => handleMaterialEdit(materialsForBrand[0].mat_id, 'mat_alert', parseFloat(e.target.value))}
-                                className="w-full max-w-[100px]"
+                                className="w-full max-w-[100px] text-gray-800"
                               />
                             ) : (
                               materialsForBrand[0].mat_alert
                             )}
                           </td>
+                          <td className="p-2 font-medium text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedBrand?.brand_price || ''}
+                                onChange={(e) => handleBrandEdit(brandId, 'brand_price', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px] text-gray-800"
+                              />
+                            ) : (
+                              brand && typeof brand.brand_price === 'number'
+                                ? `$${brand.brand_price.toFixed(2)}`
+                                : brand?.brand_price || ''
+                            )}
+                          </td>
                         </>
                       )}
-                      <td className="p-2 font-medium text-gray-800">
-                        {isEditMode ? (
-                          <Input
-                            type="number"
-                            value={editedBrand?.brand_price || ''}
-                            onChange={(e) => handleBrandEdit(brandId, 'brand_price', parseFloat(e.target.value))}
-                            className="w-full max-w-[100px]"
-                          />
-                        ) : (
-                          brand && typeof brand.brand_price === 'number'
-                            ? `$${brand.brand_price.toFixed(2)}`
-                            : brand?.brand_price || ''
-                        )}
-                      </td>
                     </tr>
                     {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => {
                       const editedMaterial = editedMaterials[material.mat_id] || material
@@ -520,7 +533,7 @@ export default function CategoryPage() {
                               <Input
                                 value={editedMaterial.mat_name}
                                 onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_name', e.target.value)}
-                                className="w-full max-w-[200px]"
+                                className="w-full max-w-[200px] text-gray-800"
                               />
                             ) : (
                               material.mat_name
@@ -531,22 +544,33 @@ export default function CategoryPage() {
                               <Input
                                 value={editedMaterial.mat_sku}
                                 onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_sku', e.target.value)}
-                                className="w-full max-w-[100px]"
+                                className="w-full max-w-[100px] text-gray-800"
                               />
                             ) : (
                               material.mat_sku
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">{material.mat_inv}</td>
                           <td className="p-2 text-gray-800">
-                            {!isEditMode && (
-                              editingInventory[material.mat_id] !== undefined ? (
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedMaterials[material.mat_id]?.mat_inv || material.mat_inv}
+                                onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_inv', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px] text-gray-800"
+                              />
+                            ) : (
+                              material.mat_inv
+                            )}
+                          </td>
+                          {!isEditMode && (
+                            <td className="p-2 text-gray-800">
+                              {editingInventory[material.mat_id] !== undefined ? (
                                 <div className="flex items-center">
                                   <Input
                                     type="number"
                                     value={editingInventory[material.mat_id]}
                                     onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
-                                    className="w-20 mr-2"
+                                    className="w-20 mr-2 text-gray-800"
                                   />
                                   <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
                                     <Check className="h-4 w-4 text-green-600" />
@@ -559,16 +583,16 @@ export default function CategoryPage() {
                                 <Button size="sm" variant="ghost" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
                                   Edit
                                 </Button>
-                              )
-                            )}
-                          </td>
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 text-gray-800">
                             {isEditMode ? (
                               <Input
                                 type="number"
                                 value={editedMaterial.mat_alert}
                                 onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_alert', parseFloat(e.target.value))}
-                                className="w-full max-w-[100px]"
+                                className="w-full max-w-[100px] text-gray-800"
                               />
                             ) : (
                               material.mat_alert
