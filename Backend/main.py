@@ -1,8 +1,18 @@
 __authors__ = "John Tran, Kevin Tojin"
 
-import creds
-import sql
+import logging
 import flask
+from flask import jsonify, request, make_response
+import sql
+import creds
+import traceback
+from urllib.parse import unquote
+
+
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Sets up connection to DB
 conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.Creds.password, creds.Creds.dbName)
@@ -409,22 +419,38 @@ def materialsGet(resouceid=None):
     query_results = None
     try:
         if resouceid is not None:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.materials
-                WHERE mat_id = {resouceid};
-            """)
-            if query_results:
-                return flask.make_response(flask.jsonify(query_results[0]), 200)
-            else:
-                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+            query = "SELECT * FROM frostedfabrics.materials WHERE mat_id = %s"
+            params = (resouceid,)
         else:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.materials;
-            """)
-            return flask.make_response(flask.jsonify(query_results), 200)
-    except:
-        return flask.make_response("Internal Server Error",500)
+            category = unquote(request.args.get('category', ''))
+            query = """
+                SELECT m.*, mb.mc_id, mc.mc_name
+                FROM frostedfabrics.materials m
+                JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+            """
+            params = None
+            if category:
+                query += " WHERE mc.mc_name = %s"
+                params = (category,)
 
+        logger.info(f"Executing query: {query} with params: {params}")
+        query_results = sql.execute_read_query(conn, query, params)
+        
+        if query_results is None:
+            logger.error("Query returned None")
+            return make_response(jsonify({"error": "Database query failed"}), 500)
+        
+        logger.info(f"Query results: {query_results}")
+        
+        if resouceid is not None:
+            return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
+        else:
+            return make_response(jsonify(query_results), 200)
+    except Exception as e:
+        logger.error(f"Error in materialsGet: {str(e)}")
+        logger.error(traceback.format_exc())
+        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
 
 @app.route('/api/materials', methods=['POST'])
 def materialsPost():
