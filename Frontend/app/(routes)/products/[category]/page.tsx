@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X, Plus } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Link from 'next/link'
 import { useToast } from "@/hooks/use-toast"
@@ -49,12 +49,6 @@ interface NewProduct {
   prod_time: string
 }
 
-interface NewVariation {
-  var_name: string
-  var_inv: number
-  var_goal: number
-}
-
 export default function ProductsCategoryPage() {
   const params = useParams()
   const router = useRouter()
@@ -75,11 +69,6 @@ export default function ProductsCategoryPage() {
     prod_cost: 0,
     prod_msrp: 0,
     prod_time: ''
-  })
-  const [newVariation, setNewVariation] = useState<NewVariation>({
-    var_name: '',
-    var_inv: 0,
-    var_goal: 0
   })
 
   const decodedCategory = decodeURIComponent(params.category as string)
@@ -250,38 +239,17 @@ export default function ProductsCategoryPage() {
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to add product')
+      if (response.status === 200) {
+        setIsAddingProduct(false)
+        setNewProduct({ prod_name: '', prod_cost: 0, prod_msrp: 0, prod_time: '' })
+        toast({
+          title: "Success",
+          description: "Product added successfully",
+        })
+        window.location.reload()
+      } else {
+        throw new Error('Failed to add product')
       }
-
-      const addedProduct = await response.json()
-
-      // Add the initial variation
-      const variationResponse = await fetch('http://localhost:5000/api/productvariations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...newVariation,
-          prod_id: addedProduct.prod_id,
-          img_id: null
-        }),
-      })
-
-      if (!variationResponse.ok) {
-        throw new Error('Failed to add variation')
-      }
-
-      setProducts(prev => [...prev, addedProduct])
-      setIsAddingProduct(false)
-      setNewProduct({ prod_name: '', prod_cost: 0, prod_msrp: 0, prod_time: '' })
-      setNewVariation({ var_name: '', var_inv: 0, var_goal: 0 })
-      toast({
-        title: "Success",
-        description: "Product and variation added successfully",
-      })
     } catch (error) {
       console.error('Error adding product:', error)
       toast({
@@ -326,79 +294,65 @@ export default function ProductsCategoryPage() {
       </div>
       {isAddingProduct && (
         <div className="mb-6 p-4 border rounded-lg bg-white">
-          <h2 className="text-xl font-bold mb-4">Add New Product</h2>
+          <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Product</h2>
           <div className="grid gap-4">
             <div>
-              <Label htmlFor="prod_name">Name</Label>
+              <Label htmlFor="prod_name" className="text-gray-700">Name</Label>
               <Input
                 id="prod_name"
                 value={newProduct.prod_name}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_name: e.target.value }))}
                 required
+                className="bg-white text-gray-800 border-gray-300"
               />
             </div>
             <div>
-              <Label htmlFor="prod_cost">Cost</Label>
+              <Label htmlFor="prod_cost" className="text-gray-700">Cost</Label>
               <Input
                 id="prod_cost"
                 type="number"
                 value={newProduct.prod_cost}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_cost: parseFloat(e.target.value) }))}
                 required
+                className="bg-white text-gray-800 border-gray-300"
               />
             </div>
             <div>
-              <Label htmlFor="prod_msrp">MSRP</Label>
+              <Label htmlFor="prod_msrp" className="text-gray-700">MSRP</Label>
               <Input
                 id="prod_msrp"
                 type="number"
                 value={newProduct.prod_msrp}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_msrp: parseFloat(e.target.value) }))}
                 required
+                className="bg-white text-gray-800 border-gray-300"
               />
             </div>
             <div>
-              <Label htmlFor="prod_time">Time</Label>
+              <Label htmlFor="prod_time" className="text-gray-700">Time</Label>
               <Input
                 id="prod_time"
                 value={newProduct.prod_time}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_time: e.target.value }))}
                 required
-              />
-            </div>
-            <div>
-              <Label htmlFor="var_name">Variation Name</Label>
-              <Input
-                id="var_name"
-                value={newVariation.var_name}
-                onChange={(e) => setNewVariation(prev => ({ ...prev, var_name: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="var_inv">Initial Inventory</Label>
-              <Input
-                id="var_inv"
-                type="number"
-                value={newVariation.var_inv}
-                onChange={(e) => setNewVariation(prev => ({ ...prev, var_inv: parseInt(e.target.value) }))}
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="var_goal">Inventory Goal</Label>
-              <Input
-                id="var_goal"
-                type="number"
-                value={newVariation.var_goal}
-                onChange={(e) => setNewVariation(prev => ({ ...prev, var_goal: parseInt(e.target.value) }))}
-                required
+                className="bg-white text-gray-800 border-gray-300"
               />
             </div>
           </div>
           <div className="mt-4 flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setIsAddingProduct(false)}>Cancel</Button>
-            <Button onClick={handleAddProduct}>Add Product</Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setIsAddingProduct(false)}
+              className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAddProduct}
+              className="bg-[#464B95] hover:bg-[#363875] text-white"
+            >
+              Add Product
+            </Button>
           </div>
         </div>
       )}
@@ -477,7 +431,7 @@ export default function ProductsCategoryPage() {
                                 type="number"
                                 value={editingInventory[singleVariation.var_id]}
                                 onChange={(e) => setEditingInventory(prev => ({ ...prev, [singleVariation.var_id]: e.target.value }))}
-                                className="w-20"
+                                className="w-20 bg-white text-gray-800 border-gray-300"
                               />
                               <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(singleVariation.var_id)}>
                                 <Check className="h-4 w-4 text-green-600" />
@@ -512,7 +466,7 @@ export default function ProductsCategoryPage() {
                                 type="number"
                                 value={editingInventory[variation.var_id]}
                                 onChange={(e) => setEditingInventory(prev => ({ ...prev, [variation.var_id]: e.target.value }))}
-                                className="w-20"
+                                className="w-20 bg-white text-gray-800 border-gray-300"
                               />
                               <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
                                 <Check className="h-4 w-4 text-green-600" />
