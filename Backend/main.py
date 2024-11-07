@@ -568,6 +568,52 @@ def materialsDelete(resouceid=None):
         return flask.make_response(flask.jsonify(query_results), 200)
     except:
         return flask.make_response("Internal Server Error",500)
+    
+# Added measurement GET request for materials page #    
+@app.route('/api/measurements/<int:resourceid>', methods=['GET'])
+def measurementsGet(resourceid=None):
+    query_results = None
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        if resourceid is not None:
+            # Join with material_categories to get the measurement info
+            query = """
+                SELECT m.* 
+                FROM frostedfabrics.measurements m
+                WHERE m.meas_id = %s
+            """
+            params = (resourceid,)
+            
+            logger.info(f"Executing query: {query} with params: {params}")
+            query_results = sql.execute_read_query(conn, query, params)
+            
+            if query_results is None:
+                logger.error("Query returned None")
+                return make_response(jsonify({"error": "Database query failed"}), 500)
+            
+            if not query_results:
+                # If no measurement found, return a default unit
+                default_measurement = {
+                    "meas_id": resourceid,
+                    "meas_unit": "units"
+                }
+                return make_response(jsonify(default_measurement), 200)
+                
+            return make_response(jsonify(query_results[0]), 200)
+        else:
+            query = "SELECT * FROM frostedfabrics.measurements"
+            query_results = sql.execute_read_query(conn, query)
+            return make_response(jsonify(query_results), 200)
+            
+    except Exception as e:
+        logger.error(f"Error in measurementsGet: {str(e)}")
+        logger.error(traceback.format_exc())
+        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+    finally:
+        if conn:
+            conn.close()
 
 # ============== VARIATION MATERIALS METHODS ============
 @app.route('/api/variationmaterials', methods=['GET'])
