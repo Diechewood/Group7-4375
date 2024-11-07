@@ -136,19 +136,19 @@ export default function CategoryPage() {
     <div className="h-full flex flex-col">
       <div className="mb-6 flex justify-between items-center">
         <div className="flex items-center">
-          <Button variant="ghost" className="mr-2" onClick={() => router.push('/categories')}>
+          <Button variant="ghost" className="mr-2 text-gray-800" onClick={() => router.push('/categories')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <h1 className="text-3xl font-bold text-[#3D3B54]">{decodedCategory}</h1>
+          <h1 className="text-3xl font-bold text-gray-800">{decodedCategory}</h1>
         </div>
         <div className="flex items-center space-x-2">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500" />
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-600" />
             <Input
               type="text"
               placeholder="Search materials..."
-              className="pl-8 w-64"
+              className="pl-8 w-64 border-gray-300 text-gray-800 placeholder-gray-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -156,6 +156,7 @@ export default function CategoryPage() {
           <Button 
             variant="outline"
             onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+            className="text-gray-800 border-gray-300"
           >
             A to Z
             <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -169,8 +170,8 @@ export default function CategoryPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : isLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+        <div className="text-center py-8 text-gray-800">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mx-auto mb-4"></div>
           Loading materials... {retryCount > 0 && `(Retry attempt ${retryCount}/3)`}
         </div>
       ) : materials.length === 0 ? (
@@ -186,16 +187,16 @@ export default function CategoryPage() {
           <AlertDescription>No materials match your search criteria. Try adjusting your search term.</AlertDescription>
         </Alert>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto flex-1">
+        <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
           <table className="w-full">
             <thead>
-              <tr className="border-b">
-                <th className="p-2 text-left">Color</th>
-                <th className="p-2 text-left">Brand/Name</th>
-                <th className="p-2 text-left">#</th>
-                <th className="p-2 text-left">Inv (oz)</th>
-                <th className="p-2 text-left">Alert(oz)</th>
-                <th className="p-2 text-left">$</th>
+              <tr className="border-b border-gray-300">
+                <th className="p-2 text-gray-800 text-left font-semibold">Color</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">#</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Inv (oz)</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Alert(oz)</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">$</th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +209,7 @@ export default function CategoryPage() {
                 return (
                   <Fragment key={brandId}>
                     <tr 
-                      className={`border-b ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
+                      className={`border-b border-gray-300 ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
                       onClick={() => hasMultipleMaterials && toggleBrand(brandId)}
                     >
                       <td className="p-2" colSpan={hasMultipleMaterials ? 5 : 1}>
@@ -220,33 +221,33 @@ export default function CategoryPage() {
                               <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
                             )
                           )}
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium text-gray-800">
                             {hasMultipleMaterials ? brand?.brand_name : materialsForBrand[0].mat_name}
                           </span>
                         </div>
                       </td>
                       {!hasMultipleMaterials && (
                         <>
-                          <td className="p-2 text-gray-900">{brand?.brand_name || ''}</td>
-                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_sku}</td>
-                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_inv}</td>
-                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_alert}</td>
+                          <td className="p-2 text-gray-800">{brand?.brand_name || ''}</td>
+                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_sku}</td>
+                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_inv}</td>
+                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_alert}</td>
                         </>
                       )}
-                      <td className="p-2 font-medium text-gray-900">
+                      <td className="p-2 font-medium text-gray-800">
                         {brand && typeof brand.brand_price === 'number'
                           ? `$${brand.brand_price.toFixed(2)}`
                           : brand?.brand_price || ''}
                       </td>
                     </tr>
                     {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => (
-                      <tr key={material.mat_id} className="border-b last:border-b-0">
-                        <td className="p-2 pl-8 text-gray-900">{material.mat_name}</td>
-                        <td className="p-2 text-gray-900"></td>
-                        <td className="p-2 text-gray-900">{material.mat_sku}</td>
-                        <td className="p-2 text-gray-900">{material.mat_inv}</td>
-                        <td className="p-2 text-gray-900">{material.mat_alert}</td>
-                        <td className="p-2 text-gray-900"></td>
+                      <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
+                        <td className="p-2 pl-8 text-gray-800">{material.mat_name}</td>
+                        <td className="p-2 text-gray-800"></td>
+                        <td className="p-2 text-gray-800">{material.mat_sku}</td>
+                        <td className="p-2 text-gray-800">{material.mat_inv}</td>
+                        <td className="p-2 text-gray-800">{material.mat_alert}</td>
+                        <td className="p-2 text-gray-800"></td>
                       </tr>
                     ))}
                   </Fragment>
