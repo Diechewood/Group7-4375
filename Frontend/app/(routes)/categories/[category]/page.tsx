@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Material {
@@ -41,6 +41,7 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [retryCount, setRetryCount] = useState(0)
   const [expandedBrands, setExpandedBrands] = useState<Set<number>>(new Set())
+  const [editingInventory, setEditingInventory] = useState<{ [key: number]: string }>({})
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
@@ -132,6 +133,51 @@ export default function CategoryPage() {
     })
   }
 
+  const handleEditInventory = (materialId: number, currentInventory: number) => {
+    setEditingInventory(prev => ({ ...prev, [materialId]: currentInventory.toString() }))
+  }
+
+  const handleCancelEdit = (materialId: number) => {
+    setEditingInventory(prev => {
+      const next = { ...prev }
+      delete next[materialId]
+      return next
+    })
+  }
+
+  const handleUpdateInventory = async (materialId: number) => {
+    const newInventory = parseFloat(editingInventory[materialId])
+    if (isNaN(newInventory)) {
+      alert('Please enter a valid number for inventory.')
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/materials/${materialId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mat_inv: newInventory }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update inventory')
+      }
+
+      setMaterials(prevMaterials =>
+        prevMaterials.map(material =>
+          material.mat_id === materialId ? { ...material, mat_inv: newInventory } : material
+        )
+      )
+
+      handleCancelEdit(materialId)
+    } catch (error) {
+      console.error('Error updating inventory:', error)
+      alert('Failed to update inventory. Please try again.')
+    }
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="mb-6 flex justify-between items-center">
@@ -191,10 +237,10 @@ export default function CategoryPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-300">
-                <th className="p-2 text-gray-800 text-left font-semibold">Color</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">#</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">Inv (oz)</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">Alert(oz)</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">$</th>
               </tr>
@@ -228,9 +274,30 @@ export default function CategoryPage() {
                       </td>
                       {!hasMultipleMaterials && (
                         <>
-                          <td className="p-2 text-gray-800">{brand?.brand_name || ''}</td>
                           <td className="p-2 text-gray-800">{materialsForBrand[0].mat_sku}</td>
                           <td className="p-2 text-gray-800">{materialsForBrand[0].mat_inv}</td>
+                          <td className="p-2 text-gray-800">
+                            {editingInventory[materialsForBrand[0].mat_id] !== undefined ? (
+                              <div className="flex items-center">
+                                <Input
+                                  type="number"
+                                  value={editingInventory[materialsForBrand[0].mat_id]}
+                                  onChange={(e) => setEditingInventory(prev => ({ ...prev, [materialsForBrand[0].mat_id]: e.target.value }))}
+                                  className="w-20 mr-2"
+                                />
+                                <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(materialsForBrand[0].mat_id)}>
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(materialsForBrand[0].mat_id)}>
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button size="sm" variant="ghost" onClick={() => handleEditInventory(materialsForBrand[0].mat_id, materialsForBrand[0].mat_inv)}>
+                                Edit
+                              </Button>
+                            )}
+                          </td>
                           <td className="p-2 text-gray-800">{materialsForBrand[0].mat_alert}</td>
                         </>
                       )}
@@ -243,9 +310,30 @@ export default function CategoryPage() {
                     {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => (
                       <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
                         <td className="p-2 pl-8 text-gray-800">{material.mat_name}</td>
-                        <td className="p-2 text-gray-800"></td>
                         <td className="p-2 text-gray-800">{material.mat_sku}</td>
                         <td className="p-2 text-gray-800">{material.mat_inv}</td>
+                        <td className="p-2 text-gray-800">
+                          {editingInventory[material.mat_id] !== undefined ? (
+                            <div className="flex items-center">
+                              <Input
+                                type="number"
+                                value={editingInventory[material.mat_id]}
+                                onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
+                                className="w-20 mr-2"
+                              />
+                              <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
+                                <Check className="h-4 w-4 text-green-600" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(material.mat_id)}>
+                                <X className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button size="sm" variant="ghost" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
+                              Edit
+                            </Button>
+                          )}
+                        </td>
                         <td className="p-2 text-gray-800">{material.mat_alert}</td>
                         <td className="p-2 text-gray-800"></td>
                       </tr>
