@@ -4,11 +4,17 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Link from 'next/link'
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const formatCurrency = (value: number | string | null | undefined): string => {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -70,10 +76,13 @@ export default function ProductsCategoryPage() {
     prod_msrp: 0,
     prod_time: ''
   })
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editedProducts, setEditedProducts] = useState<{[key: number]: Product}>({})
+  const [editedVariations, setEditedVariations] = useState<{[key: number]: ProductVariation}>({})
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
-  const fetchData = useCallback(async (signal: AbortSignal) => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true)
     setError(null)
     try {
@@ -260,17 +269,123 @@ export default function ProductsCategoryPage() {
     }
   }
 
+  const handleStartEdit = () => {
+    setIsEditMode(true)
+    const productsMap = products.reduce((acc, product) => {
+      acc[product.prod_id] = { ...product }
+      return acc
+    }, {} as {[key: number]: Product})
+    setEditedProducts(productsMap)
+
+    const variationsMap = variations.reduce((acc, variation) => {
+      acc[variation.var_id] = { ...variation }
+      return acc
+    }, {} as {[key: number]: ProductVariation})
+    setEditedVariations(variationsMap)
+  }
+
+  const handleCancelEditMode = () => {
+    setIsEditMode(false)
+    setEditedProducts({})
+    setEditedVariations({})
+  }
+
+  const handleSaveEdit = async () => {
+    setIsLoading(true);
+    try {
+      const updates = [];
+
+      // Prepare product updates
+      for (const [productId, product] of Object.entries(editedProducts)) {
+        if (products.find(p => p.prod_id === parseInt(productId))?.prod_name !== product.prod_name ||
+            products.find(p => p.prod_id === parseInt(productId))?.prod_cost !== product.prod_cost ||
+            products.find(p => p.prod_id === parseInt(productId))?.prod_msrp !== product.prod_msrp) {
+          updates.push(
+            fetch(`http://localhost:5000/api/products/${productId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prod_name: product.prod_name,
+                prod_cost: product.prod_cost,
+                prod_msrp: product.prod_msrp
+              })
+            })
+          );
+        }
+      }
+
+      // Prepare variation updates
+      for (const [variationId, variation] of Object.entries(editedVariations)) {
+        if (variations.find(v => v.var_id === parseInt(variationId))?.var_name !== variation.var_name) {
+          updates.push(
+            fetch(`http://localhost:5000/api/productvariations/${variationId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                var_name: variation.var_name
+              })
+            })
+          );
+        }
+      }
+
+      // Execute all updates
+      const results = await Promise.all(updates);
+
+      // Check if all updates were successful
+      if (results.every(res => res.ok)) {
+        toast({
+          title: "Success",
+          description: "Changes saved successfully",
+        });
+        setIsEditMode(false);
+        setEditedProducts({});
+        setEditedVariations({});
+        await fetchData(new AbortController().signal);
+      } else {
+        throw new Error('Some updates failed');
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProductEdit = (productId: number, field: keyof Product, value: string | number) => {
+    setEditedProducts(prev => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleVariationEdit = (variationId: number, field: keyof ProductVariation, value: string | number) => {
+    setEditedVariations(prev => ({
+      ...prev,
+      [variationId]: {
+        ...prev[variationId],
+        [field]: value
+      }
+    }))
+  }
+
   return (
     <div className="h-full flex flex-col">
-      <div className="mb-6 flex justify-between items-center">
-        <div className="flex items-center">
-          <Button variant="ghost" className="mr-2 text-gray-800" onClick={() => router.push('/products')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="text-3xl font-bold text-gray-800">{decodedCategory}</h1>
-        </div>
-        <div className="flex items-center space-x-2">
+      <div className="mb-6">
+        <Button variant="ghost" className="mb-2 text-gray-800" onClick={() => router.push('/products')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-3xl font-bold text-gray-800 mb-4">{decodedCategory}</h1>
+        <div className="flex justify-end items-center space-x-2">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-600" />
             <Input
@@ -289,71 +404,92 @@ export default function ProductsCategoryPage() {
             A to Z
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
+          {isEditMode ? (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={handleSaveEdit}
+                className="text-green-600 border-green-600 hover:bg-green-50"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleCancelEditMode}
+                className="text-red-600 border-red-600 hover:bg-red-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button 
+              variant="outline" 
+              onClick={handleStartEdit}
+              className="text-gray-800 border-gray-300"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Values
+            </Button>
+          )}
           <Button variant="default" onClick={() => setIsAddingProduct(true)}>Add Product</Button>
         </div>
       </div>
-      {isAddingProduct && (
-        <div className="mb-6 p-4 border rounded-lg bg-white">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Product</h2>
-          <div className="grid gap-4">
-            <div>
-              <Label htmlFor="prod_name" className="text-gray-700">Name</Label>
+      <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="prod_name">Name</Label>
               <Input
                 id="prod_name"
                 value={newProduct.prod_name}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_name: e.target.value }))}
-                required
-                className="bg-white text-gray-800 border-gray-300"
+                className="col-span-3"
               />
             </div>
-            <div>
-              <Label htmlFor="prod_cost" className="text-gray-700">Cost</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="prod_cost">Cost</Label>
               <Input
                 id="prod_cost"
                 type="number"
                 value={newProduct.prod_cost}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_cost: parseFloat(e.target.value) }))}
-                required
-                className="bg-white text-gray-800 border-gray-300"
+                className="col-span-3"
               />
             </div>
-            <div>
-              <Label htmlFor="prod_msrp" className="text-gray-700">MSRP</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="prod_msrp">MSRP</Label>
               <Input
                 id="prod_msrp"
                 type="number"
                 value={newProduct.prod_msrp}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_msrp: parseFloat(e.target.value) }))}
-                required
-                className="bg-white text-gray-800 border-gray-300"
+                className="col-span-3"
               />
             </div>
-            <div>
-              <Label htmlFor="prod_time" className="text-gray-700">Time</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="prod_time">Time</Label>
               <Input
                 id="prod_time"
                 value={newProduct.prod_time}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_time: e.target.value }))}
-                required
-                className="bg-white text-gray-800 border-gray-300"
+                className="col-span-3"
               />
             </div>
           </div>
-          <div className="mt-4 flex justify-end space-x-2">
-            <Button 
-              variant="secondary" 
-              onClick={() => setIsAddingProduct(false)}
-              className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAddProduct}
-              className="bg-[#464B95] hover:bg-[#363875] text-white"
-            >
-              Add Product
-            </Button>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsAddingProduct(false)}>Cancel</Button>
+            <Button onClick={handleAddProduct}>Add Product</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-white"></div>
         </div>
       )}
       {error ? (
@@ -386,7 +522,8 @@ export default function ProductsCategoryPage() {
               <tr className="border-b border-gray-300">
                 <th className="p-2 text-gray-800 text-left font-semibold">Name</th>
                 <th className="p-2 text-gray-800 text-left font-semibold">Quick Add</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Inv/Goal</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Inv</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">Goal</th>
                 <th className="p-2 text-gray-800 text-right font-semibold">P.Rev</th>
                 <th className="p-2 text-gray-800 text-right font-semibold">MSRP</th>
               </tr>
@@ -399,6 +536,7 @@ export default function ProductsCategoryPage() {
                 const totalGoal = productVariations.reduce((sum, v) => sum + v.var_goal, 0)
                 const hasMultipleVariations = productVariations.length > 1
                 const singleVariation = !hasMultipleVariations && productVariations[0]
+                const editedProduct = editedProducts[product.prod_id] || product
 
                 return (
                   <Fragment key={product.prod_id}>
@@ -415,16 +553,24 @@ export default function ProductsCategoryPage() {
                               <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
                             )
                           )}
-                          <Link 
-                            href={`/products/${encodeURIComponent(decodedCategory)}/${product.prod_id}`}
-                            className="hover:underline"
-                          >
-                            <span className="font-medium">{product.prod_name}</span>
-                          </Link>
+                          {isEditMode ? (
+                            <Input
+                              value={editedProduct.prod_name}
+                              onChange={(e) => handleProductEdit(product.prod_id, 'prod_name', e.target.value)}
+                              className="w-full max-w-[200px]"
+                            />
+                          ) : (
+                            <Link 
+                              href={`/products/${encodeURIComponent(decodedCategory)}/${product.prod_id}`}
+                              className="hover:underline"
+                            >
+                              <span className="font-medium">{product.prod_name}</span>
+                            </Link>
+                          )}
                         </div>
                       </td>
                       <td className="p-2 text-gray-800">
-                        {singleVariation && (
+                        {singleVariation && !isEditMode && (
                           editingInventory[singleVariation.var_id] !== undefined ? (
                             <div className="flex items-center space-x-2">
                               <Input
@@ -452,45 +598,84 @@ export default function ProductsCategoryPage() {
                           )
                         )}
                       </td>
-                      <td className="p-2 text-gray-800">{totalInv}/{totalGoal}</td>
-                      <td className="p-2 text-gray-800 text-right">{formatCurrency(product.prod_cost)}</td>
-                      <td className="p-2 text-gray-800 text-right">{formatCurrency(product.prod_msrp)}</td>
+                      <td className="p-2 text-gray-800">{totalInv}</td>
+                      <td className="p-2 text-gray-800">{totalGoal}</td>
+                      <td className="p-2 text-gray-800 text-right">
+                        {isEditMode ? (
+                          <Input
+                            type="number"
+                            value={editedProduct.prod_cost}
+                            onChange={(e) => handleProductEdit(product.prod_id, 'prod_cost', parseFloat(e.target.value))}
+                            className="w-24 ml-auto"
+                          />
+                        ) : (
+                          formatCurrency(product.prod_cost)
+                        )}
+                      </td>
+                      <td className="p-2 text-gray-800 text-right">
+                        {isEditMode ? (
+                          <Input
+                            type="number"
+                            value={editedProduct.prod_msrp}
+                            onChange={(e) => handleProductEdit(product.prod_id, 'prod_msrp', parseFloat(e.target.value))}
+                            className="w-24 ml-auto"
+                          />
+                        ) : (
+                          formatCurrency(product.prod_msrp)
+                        )}
+                      </td>
                     </tr>
-                    {hasMultipleVariations && isExpanded && productVariations.map((variation) => (
-                      <tr key={variation.var_id} className="border-b border-gray-300 last:border-b-0 bg-white">
-                        <td className="p-2 pl-8 text-gray-800">{variation.var_name}</td>
-                        <td className="p-2 text-gray-800">
-                          {editingInventory[variation.var_id] !== undefined ? (
-                            <div className="flex items-center space-x-2">
+                    {hasMultipleVariations && isExpanded && productVariations.map((variation) => {
+                      const editedVariation = editedVariations[variation.var_id] || variation
+                      return (
+                        <tr key={variation.var_id} className="border-b border-gray-300 last:border-b-0 bg-white">
+                          <td className="p-2 pl-8 text-gray-800">
+                            {isEditMode ? (
                               <Input
-                                type="number"
-                                value={editingInventory[variation.var_id]}
-                                onChange={(e) => setEditingInventory(prev => ({ ...prev, [variation.var_id]: e.target.value }))}
-                                className="w-20 bg-white text-gray-800 border-gray-300"
+                                value={editedVariation.var_name}
+                                onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
+                                className="w-full max-w-[200px]"
                               />
-                              <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
-                                <Check className="h-4 w-4 text-green-600" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(variation.var_id)}>
-                                <X className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleEditInventory(variation.var_id, variation.var_inv)}
-                              className="border-gray-800"
-                            >
-                              Edit
-                            </Button>
-                          )}
-                        </td>
-                        <td className="p-2 text-gray-800">{variation.var_inv}/{variation.var_goal}</td>
-                        <td className="p-2 text-gray-800 text-right">-</td>
-                        <td className="p-2 text-gray-800 text-right">-</td>
-                      </tr>
-                    ))}
+                            ) : (
+                              variation.var_name
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">
+                            {!isEditMode && (
+                              editingInventory[variation.var_id] !== undefined ? (
+                                <div className="flex items-center space-x-2">
+                                  <Input
+                                    type="number"
+                                    value={editingInventory[variation.var_id]}
+                                    onChange={(e) => setEditingInventory(prev => ({ ...prev, [variation.var_id]: e.target.value }))}
+                                    className="w-20 bg-white text-gray-800 border-gray-300"
+                                  />
+                                  <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(variation.var_id)}>
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => handleEditInventory(variation.var_id, variation.var_inv)}
+                                  className="border-gray-800"
+                                >
+                                  Edit
+                                </Button>
+                              )
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">{variation.var_inv}</td>
+                          <td className="p-2 text-gray-800">{variation.var_goal}</td>
+                          <td className="p-2 text-gray-800 text-right">-</td>
+                          <td className="p-2 text-gray-800 text-right">-</td>
+                        </tr>
+                      )
+                    })}
                   </Fragment>
                 )
               })}

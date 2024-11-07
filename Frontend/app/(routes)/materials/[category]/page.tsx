@@ -4,8 +4,16 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check, Pencil } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Material {
   mat_id: number
@@ -33,6 +41,7 @@ interface GroupedMaterials {
 export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
+  const { toast } = useToast()
   const [materials, setMaterials] = useState<Material[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -42,10 +51,13 @@ export default function CategoryPage() {
   const [retryCount, setRetryCount] = useState(0)
   const [expandedBrands, setExpandedBrands] = useState<Set<number>>(new Set())
   const [editingInventory, setEditingInventory] = useState<{ [key: number]: string }>({})
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editedMaterials, setEditedMaterials] = useState<{[key: number]: Material}>({})
+  const [editedBrands, setEditedBrands] = useState<{[key: number]: Brand}>({})
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
-  const fetchData = useCallback(async (signal: AbortSignal) => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true)
     setError(null)
     try {
@@ -148,7 +160,11 @@ export default function CategoryPage() {
   const handleUpdateInventory = async (materialId: number) => {
     const newInventory = parseFloat(editingInventory[materialId])
     if (isNaN(newInventory)) {
-      alert('Please enter a valid number for inventory.')
+      toast({
+        title: "Error",
+        description: "Please enter a valid number for inventory.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -172,10 +188,128 @@ export default function CategoryPage() {
       )
 
       handleCancelEdit(materialId)
+      toast({
+        title: "Success",
+        description: "Inventory updated successfully",
+      })
     } catch (error) {
       console.error('Error updating inventory:', error)
-      alert('Failed to update inventory. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to update inventory. Please try again.",
+        variant: "destructive",
+      })
     }
+  }
+
+  const handleStartEdit = () => {
+    setIsEditMode(true)
+    const materialsMap = materials.reduce((acc, material) => {
+      acc[material.mat_id] = { ...material }
+      return acc
+    }, {} as {[key: number]: Material})
+    setEditedMaterials(materialsMap)
+
+    const brandsMap = brands.reduce((acc, brand) => {
+      acc[brand.brand_id] = { ...brand }
+      return acc
+    }, {} as {[key: number]: Brand})
+    setEditedBrands(brandsMap)
+  }
+
+  const handleCancelEditMode = () => {
+    setIsEditMode(false)
+    setEditedMaterials({})
+    setEditedBrands({})
+  }
+
+  const handleSaveEdit = async () => {
+    setIsLoading(true)
+    try {
+      const updates = []
+
+      // Prepare material updates
+      for (const [materialId, material] of Object.entries(editedMaterials)) {
+        if (materials.find(m => m.mat_id === parseInt(materialId))?.mat_name !== material.mat_name ||
+            materials.find(m => m.mat_id === parseInt(materialId))?.mat_sku !== material.mat_sku ||
+            materials.find(m => m.mat_id === parseInt(materialId))?.mat_alert !== material.mat_alert) {
+          updates.push(
+            fetch(`http://localhost:5000/api/materials/${materialId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mat_name: material.mat_name,
+                mat_sku: material.mat_sku,
+                mat_alert: material.mat_alert
+              })
+            })
+          )
+        }
+      }
+
+      // Prepare brand updates
+      for (const [brandId, brand] of Object.entries(editedBrands)) {
+        if (brands.find(b => b.brand_id === parseInt(brandId))?.brand_name !== brand.brand_name ||
+            brands.find(b => b.brand_id === parseInt(brandId))?.brand_price !== brand.brand_price) {
+          updates.push(
+            fetch(`http://localhost:5000/api/materialbrands/${brandId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                brand_name: brand.brand_name,
+                brand_price: brand.brand_price
+              })
+            })
+          )
+        }
+      }
+
+      // Execute all updates
+      const results = await Promise.all(updates)
+
+      // Check if all updates were successful
+      if (results.every(res => res.ok)) {
+        toast({
+          title: "Success",
+          description: "Changes saved successfully",
+        })
+        setIsEditMode(false)
+        setEditedMaterials({})
+        setEditedBrands({})
+        await fetchData()
+      } else {
+        throw new Error('Some updates failed')
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleMaterialEdit = (materialId: number, field: keyof Material, value: string | number) => {
+    setEditedMaterials(prev => ({
+      ...prev,
+      [materialId]: {
+        ...prev[materialId],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleBrandEdit = (brandId: number, field: keyof Brand, value: string | number) => {
+    setEditedBrands(prev => ({
+      ...prev,
+      [brandId]: {
+        ...prev[brandId],
+        [field]: value
+      }
+    }))
   }
 
   return (
@@ -207,19 +341,48 @@ export default function CategoryPage() {
             A to Z
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
+          {isEditMode ? (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={handleSaveEdit}
+                className="text-green-600 border-green-600 hover:bg-green-50"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleCancelEditMode}
+                className="text-red-600 border-red-600 hover:bg-red-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button 
+              variant="outline" 
+              onClick={handleStartEdit}
+              className="text-gray-800 border-gray-300"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Values
+            </Button>
+          )}
         </div>
       </div>
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-white"></div>
+        </div>
+      )}
       {error ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      ) : isLoading ? (
-        <div className="text-center py-8 text-gray-800">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mx-auto mb-4"></div>
-          Loading materials... {retryCount > 0 && `(Retry attempt ${retryCount}/3)`}
-        </div>
       ) : materials.length === 0 ? (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -251,93 +414,170 @@ export default function CategoryPage() {
                 const materialsForBrand = groupedMaterials[brandId]
                 const isExpanded = expandedBrands.has(brandId)
                 const hasMultipleMaterials = materialsForBrand.length > 1
+                const editedBrand = editedBrands[brandId] || brand
 
                 return (
                   <Fragment key={brandId}>
                     <tr 
                       className={`border-b border-gray-300 ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
-                      onClick={() => hasMultipleMaterials && toggleBrand(brandId)}
+                      onClick={() => hasMultipleMaterials && !isEditMode && toggleBrand(brandId)}
                     >
                       <td className="p-2" colSpan={hasMultipleMaterials ? 5 : 1}>
                         <div className="flex items-center">
-                          {hasMultipleMaterials && (
+                          {hasMultipleMaterials && !isEditMode && (
                             isExpanded ? (
                               <ChevronDown className="h-4 w-4 mr-2 text-gray-600" />
                             ) : (
                               <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
                             )
                           )}
-                          <span className="font-medium text-gray-800">
-                            {hasMultipleMaterials ? brand?.brand_name : materialsForBrand[0].mat_name}
-                          </span>
+                          {isEditMode ? (
+                            <Input
+                              value={editedBrand?.brand_name || ''}
+                              onChange={(e) => handleBrandEdit(brandId, 'brand_name', e.target.value)}
+                              className="w-full max-w-[200px]"
+                            />
+                          ) : (
+                            <span className="font-medium text-gray-800">
+                              {hasMultipleMaterials ? brand?.brand_name : materialsForBrand[0].mat_name}
+                            </span>
+                          )}
                         </div>
                       </td>
                       {!hasMultipleMaterials && (
                         <>
-                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_sku}</td>
-                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_inv}</td>
                           <td className="p-2 text-gray-800">
-                            {editingInventory[materialsForBrand[0].mat_id] !== undefined ? (
-                              <div className="flex items-center">
-                                <Input
-                                  type="number"
-                                  value={editingInventory[materialsForBrand[0].mat_id]}
-                                  onChange={(e) => setEditingInventory(prev => ({ ...prev, [materialsForBrand[0].mat_id]: e.target.value }))}
-                                  className="w-20 mr-2"
-                                />
-                                <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(materialsForBrand[0].mat_id)}>
-                                  <Check className="h-4 w-4 text-green-600" />
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(materialsForBrand[0].mat_id)}>
-                                  <X className="h-4 w-4 text-red-600" />
-                                </Button>
-                              </div>
+                            {isEditMode ? (
+                              <Input
+                                value={editedMaterials[materialsForBrand[0].mat_id]?.mat_sku || materialsForBrand[0].mat_sku}
+                                onChange={(e) => handleMaterialEdit(materialsForBrand[0].mat_id, 'mat_sku', e.target.value)}
+                                className="w-full max-w-[100px]"
+                              />
                             ) : (
-                              <Button size="sm" variant="ghost" onClick={() => handleEditInventory(materialsForBrand[0].mat_id, materialsForBrand[0].mat_inv)}>
-                                Edit
-                              </Button>
+                              materialsForBrand[0].mat_sku
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_alert}</td>
+                          <td className="p-2 text-gray-800">{materialsForBrand[0].mat_inv}</td>
+                          <td className="p-2 text-gray-800">
+                            {!isEditMode && (
+                              editingInventory[materialsForBrand[0].mat_id] !== undefined ? (
+                                <div className="flex items-center">
+                                  <Input
+                                    type="number"
+                                    value={editingInventory[materialsForBrand[0].mat_id]}
+                                    onChange={(e) => setEditingInventory(prev => ({ ...prev, [materialsForBrand[0].mat_id]: e.target.value }))}
+                                    className="w-20 mr-2"
+                                  />
+                                  <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(materialsForBrand[0].mat_id)}>
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(materialsForBrand[0].mat_id)}>
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button size="sm" variant="ghost" onClick={() => handleEditInventory(materialsForBrand[0].mat_id, materialsForBrand[0].mat_inv)}>
+                                  Edit
+                                </Button>
+                              )
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedMaterials[materialsForBrand[0].mat_id]?.mat_alert || materialsForBrand[0].mat_alert}
+                                onChange={(e) => handleMaterialEdit(materialsForBrand[0].mat_id, 'mat_alert', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px]"
+                              />
+                            ) : (
+                              materialsForBrand[0].mat_alert
+                            )}
+                          </td>
                         </>
                       )}
                       <td className="p-2 font-medium text-gray-800">
-                        {brand && typeof brand.brand_price === 'number'
-                          ? `$${brand.brand_price.toFixed(2)}`
-                          : brand?.brand_price || ''}
+                        {isEditMode ? (
+                          <Input
+                            type="number"
+                            value={editedBrand?.brand_price || ''}
+                            onChange={(e) => handleBrandEdit(brandId, 'brand_price', parseFloat(e.target.value))}
+                            className="w-full max-w-[100px]"
+                          />
+                        ) : (
+                          brand && typeof brand.brand_price === 'number'
+                            ? `$${brand.brand_price.toFixed(2)}`
+                            : brand?.brand_price || ''
+                        )}
                       </td>
                     </tr>
-                    {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => (
-                      <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
-                        <td className="p-2 pl-8 text-gray-800">{material.mat_name}</td>
-                        <td className="p-2 text-gray-800">{material.mat_sku}</td>
-                        <td className="p-2 text-gray-800">{material.mat_inv}</td>
-                        <td className="p-2 text-gray-800">
-                          {editingInventory[material.mat_id] !== undefined ? (
-                            <div className="flex items-center">
+                    {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => {
+                      const editedMaterial = editedMaterials[material.mat_id] || material
+                      return (
+                        <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
+                          <td className="p-2 pl-8 text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                value={editedMaterial.mat_name}
+                                onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_name', e.target.value)}
+                                className="w-full max-w-[200px]"
+                              />
+                            ) : (
+                              material.mat_name
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                value={editedMaterial.mat_sku}
+                                onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_sku', e.target.value)}
+                                className="w-full max-w-[100px]"
+                              />
+                            ) : (
+                              material.mat_sku
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">{material.mat_inv}</td>
+                          <td className="p-2 text-gray-800">
+                            {!isEditMode && (
+                              editingInventory[material.mat_id] !== undefined ? (
+                                <div className="flex items-center">
+                                  <Input
+                                    type="number"
+                                    value={editingInventory[material.mat_id]}
+                                    onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
+                                    className="w-20 mr-2"
+                                  />
+                                  <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(material.mat_id)}>
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button size="sm" variant="ghost" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
+                                  Edit
+                                </Button>
+                              )
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">
+                            {isEditMode ? (
                               <Input
                                 type="number"
-                                value={editingInventory[material.mat_id]}
-                                onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
-                                className="w-20 mr-2"
+                                value={editedMaterial.mat_alert}
+                                onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_alert', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px]"
                               />
-                              <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
-                                <Check className="h-4 w-4 text-green-600" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(material.mat_id)}>
-                                <X className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button size="sm" variant="ghost" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
-                              Edit
-                            </Button>
-                          )}
-                        </td>
-                        <td className="p-2 text-gray-800">{material.mat_alert}</td>
-                        <td className="p-2 text-gray-800"></td>
-                      </tr>
-                    ))}
+                            ) : (
+                              material.mat_alert
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800"></td>
+                        </tr>
+                      )
+                    })}
                   </Fragment>
                 )
               })}
