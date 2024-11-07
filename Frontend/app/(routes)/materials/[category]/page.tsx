@@ -7,13 +7,26 @@ import { Button } from "@/components/ui/button"
 import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check, Pencil } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+
+interface MaterialMeasurement {
+  meas_id: number
+  meas_unit: string
+}
+
+interface MaterialCategory {
+  mc_id: number
+  meas_id: number
+  mc_name: string
+  img_id: string | null
+}
+
+interface MaterialBrand {
+  brand_id: number
+  mc_id: number
+  brand_name: string
+  brand_price: number
+  img_id: string | null
+}
 
 interface Material {
   mat_id: number
@@ -24,14 +37,9 @@ interface Material {
   mat_alert: number
   img_id: string | null
   mc_id: number
-}
-
-interface Brand {
-  brand_id: number
-  mc_id: number
-  brand_name: string
-  brand_price: number | string
-  img_id: string | null
+  mc_name: string
+  meas_id: number
+  meas_unit: string
 }
 
 interface GroupedMaterials {
@@ -43,7 +51,7 @@ export default function CategoryPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [materials, setMaterials] = useState<Material[]>([])
-  const [brands, setBrands] = useState<Brand[]>([])
+  const [brands, setBrands] = useState<MaterialBrand[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +61,7 @@ export default function CategoryPage() {
   const [editingInventory, setEditingInventory] = useState<{ [key: number]: string }>({})
   const [isEditMode, setIsEditMode] = useState(false)
   const [editedMaterials, setEditedMaterials] = useState<{[key: number]: Material}>({})
-  const [editedBrands, setEditedBrands] = useState<{[key: number]: Brand}>({})
+  const [editedBrands, setEditedBrands] = useState<{[key: number]: MaterialBrand}>({})
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
@@ -94,6 +102,20 @@ export default function CategoryPage() {
       setIsLoading(false)
     }
   }, [decodedCategory, retryCount])
+
+  useEffect(() => {
+    const abortController = new AbortController()
+    const signal = abortController.signal
+
+    fetchData(signal)
+
+    const retryTimer = retryCount > 0 && retryCount < 3 ? setTimeout(() => fetchData(signal), 1000) : null
+
+    return () => {
+      abortController.abort()
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [fetchData, retryCount])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -213,7 +235,7 @@ export default function CategoryPage() {
     const brandsMap = brands.reduce((acc, brand) => {
       acc[brand.brand_id] = { ...brand }
       return acc
-    }, {} as {[key: number]: Brand})
+    }, {} as {[key: number]: MaterialBrand})
     setEditedBrands(brandsMap)
   }
 
@@ -304,7 +326,7 @@ export default function CategoryPage() {
     }))
   }
 
-  const handleBrandEdit = (brandId: number, field: keyof Brand, value: string | number) => {
+  const handleBrandEdit = (brandId: number, field: keyof MaterialBrand, value: string | number) => {
     setEditedBrands(prev => ({
       ...prev,
       [brandId]: {
@@ -397,20 +419,24 @@ export default function CategoryPage() {
         </Alert>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-300">
-                <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">#</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Inv (oz)</th>
-                {!isEditMode && (
-                  <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
-                )}
-                <th className="p-2 text-gray-800 text-left font-semibold">Alert(oz)</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">$</th>
-              </tr>
-            </thead>
-            <tbody>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-300">
+              <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
+              <th className="p-2 text-gray-800 text-left font-semibold">#</th>
+              <th className="p-2 text-gray-800 text-left font-semibold">
+                Inv ({materials[0]?.meas_unit || 'units'})
+              </th>
+              {!isEditMode && (
+                <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
+              )}
+              <th className="p-2 text-gray-800 text-left font-semibold">
+                Alert ({materials[0]?.meas_unit || 'units'})
+              </th>
+              <th className="p-2 text-gray-800 text-left font-semibold">$</th>
+            </tr>
+          </thead>
+          <tbody>
               {sortedBrandIds.map((brandId) => {
                 const brand = brands.find(b => b.brand_id === brandId)
                 const materialsForBrand = groupedMaterials[brandId]
