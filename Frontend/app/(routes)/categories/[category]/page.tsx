@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Material {
@@ -26,6 +26,10 @@ interface Brand {
   img_id: string | null
 }
 
+interface GroupedMaterials {
+  [key: number]: Material[]
+}
+
 export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
@@ -36,6 +40,7 @@ export default function CategoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [retryCount, setRetryCount] = useState(0)
+  const [expandedBrands, setExpandedBrands] = useState<Set<number>>(new Set())
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
@@ -99,11 +104,33 @@ export default function CategoryPage() {
       material.mat_sku.toLowerCase().includes(searchTerm.toLowerCase())
   })
 
-  const sortedMaterials = [...filteredMaterials].sort((a, b) => {
-    const nameA = brands.find(brand => brand.brand_id === a.brand_id)?.brand_name || a.mat_name
-    const nameB = brands.find(brand => brand.brand_id === b.brand_id)?.brand_name || b.mat_name
-    return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA)
-  })
+  const groupedMaterials = filteredMaterials.reduce((acc: GroupedMaterials, material) => {
+    if (!acc[material.brand_id]) {
+      acc[material.brand_id] = []
+    }
+    acc[material.brand_id].push(material)
+    return acc
+  }, {})
+
+  const sortedBrandIds = Object.keys(groupedMaterials)
+    .map(Number)
+    .sort((a, b) => {
+      const brandA = brands.find(brand => brand.brand_id === a)?.brand_name || ''
+      const brandB = brands.find(brand => brand.brand_id === b)?.brand_name || ''
+      return sortDirection === 'asc' ? brandA.localeCompare(brandB) : brandB.localeCompare(brandA)
+    })
+
+  const toggleBrand = (brandId: number) => {
+    setExpandedBrands(prev => {
+      const next = new Set(prev)
+      if (next.has(brandId)) {
+        next.delete(brandId)
+      } else {
+        next.add(brandId)
+      }
+      return next
+    })
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -172,21 +199,57 @@ export default function CategoryPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedMaterials.map((material) => {
-                const brand = brands.find(b => b.brand_id === material.brand_id)
+              {sortedBrandIds.map((brandId) => {
+                const brand = brands.find(b => b.brand_id === brandId)
+                const materialsForBrand = groupedMaterials[brandId]
+                const isExpanded = expandedBrands.has(brandId)
+                const hasMultipleMaterials = materialsForBrand.length > 1
+
                 return (
-                  <tr key={material.mat_id} className="border-b last:border-b-0">
-                    <td className="p-2">{material.mat_name}</td>
-                    <td className="p-2">{brand?.brand_name || ''}</td>
-                    <td className="p-2">{material.mat_sku}</td>
-                    <td className="p-2">{material.mat_inv}</td>
-                    <td className="p-2">{material.mat_alert}</td>
-                    <td className="p-2">
-                      {brand && typeof brand.brand_price === 'number'
-                        ? `$${brand.brand_price.toFixed(2)}`
-                        : brand?.brand_price || ''}
-                    </td>
-                  </tr>
+                  <Fragment key={brandId}>
+                    <tr 
+                      className={`border-b ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
+                      onClick={() => hasMultipleMaterials && toggleBrand(brandId)}
+                    >
+                      <td className="p-2" colSpan={hasMultipleMaterials ? 5 : 1}>
+                        <div className="flex items-center">
+                          {hasMultipleMaterials && (
+                            isExpanded ? (
+                              <ChevronDown className="h-4 w-4 mr-2 text-gray-600" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
+                            )
+                          )}
+                          <span className="font-medium text-gray-900">
+                            {hasMultipleMaterials ? brand?.brand_name : materialsForBrand[0].mat_name}
+                          </span>
+                        </div>
+                      </td>
+                      {!hasMultipleMaterials && (
+                        <>
+                          <td className="p-2 text-gray-900">{brand?.brand_name || ''}</td>
+                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_sku}</td>
+                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_inv}</td>
+                          <td className="p-2 text-gray-900">{materialsForBrand[0].mat_alert}</td>
+                        </>
+                      )}
+                      <td className="p-2 font-medium text-gray-900">
+                        {brand && typeof brand.brand_price === 'number'
+                          ? `$${brand.brand_price.toFixed(2)}`
+                          : brand?.brand_price || ''}
+                      </td>
+                    </tr>
+                    {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => (
+                      <tr key={material.mat_id} className="border-b last:border-b-0">
+                        <td className="p-2 pl-8 text-gray-900">{material.mat_name}</td>
+                        <td className="p-2 text-gray-900"></td>
+                        <td className="p-2 text-gray-900">{material.mat_sku}</td>
+                        <td className="p-2 text-gray-900">{material.mat_inv}</td>
+                        <td className="p-2 text-gray-900">{material.mat_alert}</td>
+                        <td className="p-2 text-gray-900"></td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 )
               })}
             </tbody>
