@@ -24,7 +24,7 @@ export default function Sidebar() {
             </Link>
           </li>
           <li>
-            <Link href="/categories">
+            <Link href="/materials">
               <Button variant="ghost" className="w-full justify-start text-gray-800 hover:text-purple-700">
                 <Gem className="mr-2 h-5 w-5" />
                 Materials

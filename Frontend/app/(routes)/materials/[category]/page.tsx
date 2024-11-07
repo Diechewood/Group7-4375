@@ -182,7 +182,7 @@ export default function CategoryPage() {
     <div className="h-full flex flex-col">
       <div className="mb-6 flex justify-between items-center">
         <div className="flex items-center">
-          <Button variant="ghost" className="mr-2 text-gray-800" onClick={() => router.push('/categories')}>
+          <Button variant="ghost" className="mr-2 text-gray-800" onClick={() => router.push('/materials')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>

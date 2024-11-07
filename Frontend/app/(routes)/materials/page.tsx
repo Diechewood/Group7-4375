@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Plus } from 'lucide-react'
 import Link from 'next/link'
-import CategoryCard from '@/components/CategoryCard'
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 
 interface Category {
@@ -72,7 +72,7 @@ export default function CategoriesPage() {
         },
         body: JSON.stringify({
           mc_name: newCategoryName,
-          meas_id: null, // Assuming meas_id is not required or can be null
+          meas_id: null,
           img_id: null
         }),
       })
@@ -86,9 +86,7 @@ export default function CategoriesPage() {
         description: "Category added successfully",
       })
 
-      // Refresh categories
       await fetchCategories()
-
       setNewCategoryName("")
       setIsAddingCategory(false)
     } catch (error) {
@@ -127,7 +125,13 @@ export default function CategoriesPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredCategories.map((category) => (
-            <CategoryCard key={category.mc_id} id={category.mc_id} name={category.mc_name} />
+            <Link href={`/materials/${encodeURIComponent(category.mc_name)}`} key={category.mc_id}>
+              <Card className="hover:bg-gray-50 transition-colors cursor-pointer">
+                <CardHeader>
+                  <CardTitle className="text-lg">{category.mc_name}</CardTitle>
+                </CardHeader>
+              </Card>
+            </Link>
           ))}
           {isAddingCategory ? (
             <div className="flex flex-col items-center justify-center p-4 border rounded-lg bg-white">
