@@ -15,25 +15,29 @@ def create_connection(host_name, user_name, user_password, db_name):
         print(f"the error '{e}' has occured")
     return connection
 
-def execute_query(connection, query):
+def execute_query(connection, query, params=None):
     cursor = connection.cursor()
     try:
-        cursor.execute(query)
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
         connection.commit()
         print("query executed successfully")
     except Error as e:
         print(f"the error '{e}' has occured")
         raise
 
-def execute_read_query(connection, query):
+def execute_read_query(connection, query, params=None):
     cursor = connection.cursor(dictionary=True)
     result = None
     try:
-        cursor.execute(query)
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
         result = cursor.fetchall()
         return result
     except Error as e:
         print(f"the error '{e}' has occured")
         raise
-
-

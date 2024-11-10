@@ -1,8 +1,18 @@
-__authors__ = "John Tran, Kevin Tojin"
+__authors__ = "John Tran, Kevin Tojin, Elian Gutierrez"
 
-import creds
-import sql
+import logging
 import flask
+from flask import jsonify, request, make_response
+import sql
+import creds
+import traceback
+from urllib.parse import unquote
+import time
+import mysql.connector
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Sets up connection to DB
 conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.Creds.password, creds.Creds.dbName)
@@ -10,6 +20,22 @@ conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.
 # setting up an application name
 app = flask.Flask(__name__) # sets up the application
 app.config["DEBUG"] = False # allow to show errors in browser
+
+# Function to create a database connection with retry mechanism
+def get_db_connection():
+    max_retries = 3
+    retry_delay = 1  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.Creds.password, creds.Creds.dbName)
+            return conn
+        except mysql.connector.Error as err:
+            logger.error(f"Database connection attempt {attempt + 1} failed: {err}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise
 
 # Enable CORS for all routes
 @app.after_request
@@ -27,26 +53,48 @@ def test():
 
 # ============== PRODUCTS METHODS ============
 @app.route('/api/products', methods=['GET'])
-@app.route('/api/products/<int:resouceid>', methods=['GET'])
-def productsGet(resouceid=None):
+@app.route('/api/products/<int:resourceid>', methods=['GET'])
+def productsGet(resourceid=None):
     query_results = None
+    conn = None
     try:
-        if resouceid is not None:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.products
-                WHERE prod_id = {resouceid};
-            """)
-            if query_results:
-                return flask.make_response(flask.jsonify(query_results[0]), 200)
-            else:
-                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+        conn = get_db_connection()
+        
+        if resourceid is not None:
+            query = "SELECT * FROM frostedfabrics.products WHERE prod_id = %s"
+            params = (resourceid,)
         else:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.products;
-            """)
-            return flask.make_response(flask.jsonify(query_results), 200)
-    except:
-        return flask.make_response("Internal Server Error",500)
+            category = unquote(request.args.get('category', ''))
+            query = """
+                SELECT p.*, pc.pc_name
+                FROM frostedfabrics.products p
+                JOIN frostedfabrics.product_categories pc ON p.pc_id = pc.pc_id
+            """
+            params = None
+            if category:
+                query += " WHERE pc.pc_name = %s"
+                params = (category,)
+
+        logger.info(f"Executing query: {query} with params: {params}")
+        query_results = sql.execute_read_query(conn, query, params)
+        
+        if query_results is None:
+            logger.error("Query returned None")
+            return make_response(jsonify({"error": "Database query failed"}), 500)
+        
+        logger.info(f"Query results count: {len(query_results)}")
+        
+        if resourceid is not None:
+            return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
+        else:
+            return make_response(jsonify(query_results), 200)
+    except Exception as e:
+        logger.error(f"Error in productsGet: {str(e)}")
+        logger.error(traceback.format_exc())
+        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/api/products', methods=['POST'])
@@ -107,26 +155,44 @@ def productsDelete(resouceid=None):
 
 # ============== PRODUCT VARIATIONS METHODS ============
 @app.route('/api/productvariations', methods=['GET'])
-@app.route('/api/productvariations/<int:resouceid>', methods=['GET'])
-def productvariationsGet(resouceid=None):
+@app.route('/api/productvariations/<int:resourceid>', methods=['GET'])
+def productvariationsGet(resourceid=None):
     query_results = None
+    conn = None
     try:
-        if resouceid is not None:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.product_variations
-                WHERE var_id = {resouceid};
-            """)
-            if query_results:
-                return flask.make_response(flask.jsonify(query_results[0]), 200)
-            else:
-                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+        conn = get_db_connection()
+        
+        if resourceid is not None:
+            query = "SELECT * FROM frostedfabrics.product_variations WHERE var_id = %s"
+            params = (resourceid,)
         else:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.product_variations;
-            """)
-            return flask.make_response(flask.jsonify(query_results), 200)
-    except:
-        return flask.make_response("Internal Server Error",500)
+            product = request.args.get('product')
+            query = "SELECT * FROM frostedfabrics.product_variations"
+            params = None
+            if product:
+                query += " WHERE prod_id = %s"
+                params = (product,)
+
+        logger.info(f"Executing query: {query} with params: {params}")
+        query_results = sql.execute_read_query(conn, query, params)
+        
+        if query_results is None:
+            logger.error("Query returned None")
+            return make_response(jsonify({"error": "Database query failed"}), 500)
+        
+        logger.info(f"Query results count: {len(query_results)}")
+        
+        if resourceid is not None:
+            return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
+        else:
+            return make_response(jsonify(query_results), 200)
+    except Exception as e:
+        logger.error(f"Error in productvariationsGet: {str(e)}")
+        logger.error(traceback.format_exc())
+        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/api/productvariations', methods=['POST'])
@@ -407,24 +473,54 @@ def materialbrandsDelete(resouceid=None):
 @app.route('/api/materials/<int:resouceid>', methods=['GET'])
 def materialsGet(resouceid=None):
     query_results = None
+    conn = None
     try:
+        conn = get_db_connection()
+        
         if resouceid is not None:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.materials
-                WHERE mat_id = {resouceid};
-            """)
-            if query_results:
-                return flask.make_response(flask.jsonify(query_results[0]), 200)
-            else:
-                return flask.make_response(flask.jsonify("The requested resource was not found"), 404)
+            query = """
+                SELECT m.*, mb.mc_id, mc.mc_name, mc.meas_id, mm.meas_unit
+                FROM frostedfabrics.materials m
+                JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+                LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
+                WHERE m.mat_id = %s
+            """
+            params = (resouceid,)
         else:
-            query_results = sql.execute_read_query(conn, f"""
-                SELECT * FROM frostedfabrics.materials;
-            """)
-            return flask.make_response(flask.jsonify(query_results), 200)
-    except:
-        return flask.make_response("Internal Server Error",500)
+            category = unquote(request.args.get('category', ''))
+            query = """
+                SELECT m.*, mb.mc_id, mc.mc_name, mc.meas_id, mm.meas_unit
+                FROM frostedfabrics.materials m
+                JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+                LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
+            """
+            params = None
+            if category:
+                query += " WHERE mc.mc_name = %s"
+                params = (category,)
 
+        logger.info(f"Executing query: {query} with params: {params}")
+        query_results = sql.execute_read_query(conn, query, params)
+        
+        if query_results is None:
+            logger.error("Query returned None")
+            return make_response(jsonify({"error": "Database query failed"}), 500)
+        
+        logger.info(f"Query results count: {len(query_results)}")
+        
+        if resouceid is not None:
+            return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
+        else:
+            return make_response(jsonify(query_results), 200)
+    except Exception as e:
+        logger.error(f"Error in materialsGet: {str(e)}")
+        logger.error(traceback.format_exc())
+        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/api/materials', methods=['POST'])
 def materialsPost():
