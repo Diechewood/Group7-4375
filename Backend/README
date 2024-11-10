@@ -1,0 +1,43 @@
+# Flask Backend Server
+
+This repository contains the backend server code for a web application built using Flask, a lightweight web framework for Python. The backend server handles HTTP requests, manages database interactions, and serves as the application’s core API.
+
+## Features
+
+- RESTful API endpoints for handling CRUD operations.
+- MySQL database integration for data storage and retrieval.
+- Environment variable management for secure configuration.
+- Configurable for both local development and deployment in containerized environments (e.g., Docker).
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.x installed
+- MySQL database setup and credentials configured in `.env` (see below)
+
+### Environment Variables
+
+1. Create a `.env` file in the `/Backend` directory to store database credentials:
+
+    `dbusername=usernamehere`
+    `dbpassword=passwordhere`
+    
+
+### Installation
+    
+1. Install the required dependencies:
+    
+    `pip install --no-cache-dir -r requirements.txt`
+    
+
+### Running the Server
+
+1. Start the Flask server with the following command:
+    
+    `flask --app main.py run --host=0.0.0.0`
+
+
+### Additional Notes
+
+- **Database Setup**: Make sure your MySQL database is set up and accessible with the credentials provided in your `.env` file.

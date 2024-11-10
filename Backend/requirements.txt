@@ -1,0 +1,3 @@
+Flask==3.0.2             # The web framework
+mysql-connector-python==8.3.0 # SQL connector
+python-dotenv 
