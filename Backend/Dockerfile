@@ -20,5 +20,8 @@ EXPOSE 5000
 ENV dbusername=UsernameHere
 ENV dbpassword=PasswordHere
 
-# Run the Flask server
-CMD ["flask", "--app", "main.py","run", "--host=0.0.0.0"]
+# Run the Flask server for dev
+CMD ["flask", "--app", "main.py","run", "--host=0.0.0.0"] 
+
+# Run the Flask server for prod
+# CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"] 
