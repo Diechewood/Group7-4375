@@ -15,17 +15,6 @@ export default function Header() {
           <h1 className="text-xl font-bold text-white">Frosted Fabrics</h1>
         </Link>
       </div>
-      <div className="flex space-x-2">
-        <Button variant="ghost" size="icon" className="text-white hover:text-purple-200">
-          <Bell className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="text-white hover:text-purple-200">
-          <Star className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="text-white hover:text-purple-200">
-          <HelpCircle className="h-5 w-5" />
-        </Button>
-      </div>
     </header>
   )
 }

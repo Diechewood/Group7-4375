@@ -9,8 +9,6 @@ const navItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard' },
   { href: '/products', icon: Menu, label: 'Products' },
   { href: '/materials', icon: Gem, label: 'Materials' },
-  { href: '/todo', icon: ListTodo, label: 'To-do List' },
-  { href: '/events', icon: Cake, label: 'Events' },
 ]
 
 export default function Sidebar() {
