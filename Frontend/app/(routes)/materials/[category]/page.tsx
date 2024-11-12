@@ -117,20 +117,6 @@ export default function CategoryPage() {
     }
   }, [fetchData, retryCount])
 
-  useEffect(() => {
-    const abortController = new AbortController()
-    const signal = abortController.signal
-
-    fetchData(signal)
-
-    const retryTimer = retryCount > 0 && retryCount < 3 ? setTimeout(() => fetchData(signal), 1000) : null
-
-    return () => {
-      abortController.abort()
-      if (retryTimer) clearTimeout(retryTimer)
-    }
-  }, [fetchData, retryCount])
-
   const filteredMaterials = materials.filter(material => {
     const brand = brands.find(b => b.brand_id === material.brand_id)
     return searchTerm === '' || 
@@ -419,24 +405,24 @@ export default function CategoryPage() {
         </Alert>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-300">
-              <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
-              <th className="p-2 text-gray-800 text-left font-semibold">#</th>
-              <th className="p-2 text-gray-800 text-left font-semibold">
-                Inv ({materials[0]?.meas_unit || 'units'})
-              </th>
-              {!isEditMode && (
-                <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
-              )}
-              <th className="p-2 text-gray-800 text-left font-semibold">
-                Alert ({materials[0]?.meas_unit || 'units'})
-              </th>
-              <th className="p-2 text-gray-800 text-left font-semibold">$</th>
-            </tr>
-          </thead>
-          <tbody>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-300">
+                <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">#</th>
+                <th className="p-2 text-gray-800 text-left font-semibold">
+                  Inv ({materials[0]?.meas_unit || 'units'})
+                </th>
+                {!isEditMode && (
+                  <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
+                )}
+                <th className="p-2 text-gray-800 text-left font-semibold">
+                  Alert ({materials[0]?.meas_unit || 'units'})
+                </th>
+                <th className="p-2 text-gray-800 text-left font-semibold">$</th>
+              </tr>
+            </thead>
+            <tbody>
               {sortedBrandIds.map((brandId) => {
                 const brand = brands.find(b => b.brand_id === brandId)
                 const materialsForBrand = groupedMaterials[brandId]
@@ -450,7 +436,7 @@ export default function CategoryPage() {
                       className={`border-b border-gray-300 ${hasMultipleMaterials ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
                       onClick={() => hasMultipleMaterials && toggleBrand(brandId)}
                     >
-                      <td className="p-2" colSpan={hasMultipleMaterials ? 5 : 1}>
+                      <td className="p-2">
                         <div className="flex items-center">
                           {hasMultipleMaterials && (
                             isExpanded ? (
@@ -472,7 +458,7 @@ export default function CategoryPage() {
                           )}
                         </div>
                       </td>
-                      {!hasMultipleMaterials && (
+                      {!hasMultipleMaterials ? (
                         <>
                           <td className="p-2 text-gray-800">
                             {isEditMode ? (
@@ -548,6 +534,24 @@ export default function CategoryPage() {
                             )}
                           </td>
                         </>
+                      ) : (
+                        <>
+                          <td className="p-2 text-gray-800" colSpan={isEditMode ? 3 : 4}></td>
+                          <td className="p-2 font-medium text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedBrand?.brand_price || ''}
+                                onChange={(e) => handleBrandEdit(brandId, 'brand_price', parseFloat(e.target.value))}
+                                className="w-full max-w-[100px] text-gray-800"
+                              />
+                            ) : (
+                              brand && typeof brand.brand_price === 'number'
+                                ? `$${brand.brand_price.toFixed(2)}`
+                                : brand?.brand_price || ''
+                            )}
+                          </td>
+                        </>
                       )}
                     </tr>
                     {hasMultipleMaterials && isExpanded && materialsForBrand.map((material) => {
@@ -606,7 +610,7 @@ export default function CategoryPage() {
                                   </Button>
                                 </div>
                               ) : (
-                                <Button size="sm" variant="ghost" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
+                                <Button size="sm" variant="ghost" className="border border-black hover:bg-gray-100 text-gray-800" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
                                   Edit
                                 </Button>
                               )}
