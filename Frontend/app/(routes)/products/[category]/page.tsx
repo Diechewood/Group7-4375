@@ -68,7 +68,7 @@ export default function ProductsCategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [retryCount, setRetryCount] = useState(0)
   const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set())
-  const [editingInventory, setEditingInventory] = useState<{ [key: number]: string }>({})
+  const [editingInventory, setEditingInventory] = useState<{ [key: number]: { inv: string, goal: string } }>({})
   const [isAddingProduct, setIsAddingProduct] = useState(false)
   const [newProduct, setNewProduct] = useState<NewProduct>({
     prod_name: '',
@@ -177,8 +177,11 @@ export default function ProductsCategoryPage() {
       : b.prod_name.localeCompare(a.prod_name)
   })
 
-  const handleEditInventory = (variationId: number, currentInventory: number) => {
-    setEditingInventory(prev => ({ ...prev, [variationId]: currentInventory.toString() }))
+  const handleEditInventory = (variationId: number, currentInventory: number, currentGoal: number) => {
+    setEditingInventory(prev => ({ 
+      ...prev, 
+      [variationId]: { inv: currentInventory.toString(), goal: currentGoal.toString() }
+    }))
   }
 
   const handleCancelEdit = (variationId: number) => {
@@ -190,11 +193,12 @@ export default function ProductsCategoryPage() {
   }
 
   const handleUpdateInventory = async (variationId: number) => {
-    const newInventory = parseFloat(editingInventory[variationId])
-    if (isNaN(newInventory)) {
+    const newInventory = parseFloat(editingInventory[variationId].inv)
+    const newGoal = parseFloat(editingInventory[variationId].goal)
+    if (isNaN(newInventory) || isNaN(newGoal)) {
       toast({
         title: "Error",
-        description: "Please enter a valid number for inventory.",
+        description: "Please enter valid numbers for inventory and goal.",
         variant: "destructive",
       })
       return
@@ -206,27 +210,27 @@ export default function ProductsCategoryPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ var_inv: newInventory }),
+        body: JSON.stringify({ var_inv: newInventory, var_goal: newGoal }),
       })
 
-      if (!response.ok) throw new Error('Failed to update inventory')
+      if (!response.ok) throw new Error('Failed to update inventory and goal')
 
       setVariations(prev =>
         prev.map(v =>
-          v.var_id === variationId ? { ...v, var_inv: newInventory } : v
+          v.var_id === variationId ? { ...v, var_inv: newInventory, var_goal: newGoal } : v
         )
       )
 
       handleCancelEdit(variationId)
       toast({
         title: "Success",
-        description: "Inventory updated successfully",
+        description: "Inventory and goal updated successfully",
       })
     } catch (error) {
-      console.error('Error updating inventory:', error)
+      console.error('Error updating inventory and goal:', error)
       toast({
         title: "Error",
-        description: "Failed to update inventory. Please try again.",
+        description: "Failed to update inventory and goal. Please try again.",
         variant: "destructive",
       })
     }
@@ -316,13 +320,18 @@ export default function ProductsCategoryPage() {
 
       // Prepare variation updates
       for (const [variationId, variation] of Object.entries(editedVariations)) {
-        if (variations.find(v => v.var_id === parseInt(variationId))?.var_name !== variation.var_name) {
+        const originalVariation = variations.find(v => v.var_id === parseInt(variationId));
+        if (originalVariation?.var_name !== variation.var_name ||
+            originalVariation?.var_inv !== variation.var_inv ||
+            originalVariation?.var_goal !== variation.var_goal) {
           updates.push(
             fetch(`http://localhost:5000/api/productvariations/${variationId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                var_name: variation.var_name
+                var_name: variation.var_name,
+                var_inv: variation.var_inv,
+                var_goal: variation.var_goal
               })
             })
           );
@@ -570,13 +579,16 @@ export default function ProductsCategoryPage() {
                         </div>
                       </td>
                       <td className="p-2 text-gray-800">
-                        {singleVariation && !isEditMode && (
+                        {singleVariation && (
                           editingInventory[singleVariation.var_id] !== undefined ? (
                             <div className="flex items-center space-x-2">
                               <Input
                                 type="number"
-                                value={editingInventory[singleVariation.var_id]}
-                                onChange={(e) => setEditingInventory(prev => ({ ...prev, [singleVariation.var_id]: e.target.value }))}
+                                value={editingInventory[singleVariation.var_id].inv}
+                                onChange={(e) => setEditingInventory(prev => ({ 
+                                  ...prev, 
+                                  [singleVariation.var_id]: { ...prev[singleVariation.var_id], inv: e.target.value }
+                                }))}
                                 className="w-20 bg-white text-gray-800 border-gray-300"
                               />
                               <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(singleVariation.var_id)}>
@@ -590,7 +602,7 @@ export default function ProductsCategoryPage() {
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              onClick={() => handleEditInventory(singleVariation.var_id, singleVariation.var_inv)}
+                              onClick={() => handleEditInventory(singleVariation.var_id, singleVariation.var_inv, singleVariation.var_goal)}
                               className="border-gray-800"
                             >
                               Edit
@@ -598,8 +610,30 @@ export default function ProductsCategoryPage() {
                           )
                         )}
                       </td>
-                      <td className="p-2 text-gray-800">{totalInv}</td>
-                      <td className="p-2 text-gray-800">{totalGoal}</td>
+                      <td className="p-2 text-gray-800">
+                        {isEditMode && singleVariation ? (
+                          <Input
+                            type="number"
+                            value={editedVariations[singleVariation.var_id]?.var_inv || singleVariation.var_inv}
+                            onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_inv', parseInt(e.target.value))}
+                            className="w-20"
+                          />
+                        ) : (
+                          totalInv
+                        )}
+                      </td>
+                      <td className="p-2 text-gray-800">
+                        {isEditMode && singleVariation ? (
+                          <Input
+                            type="number"
+                            value={editedVariations[singleVariation.var_id]?.var_goal || singleVariation.var_goal}
+                            onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_goal', parseInt(e.target.value))}
+                            className="w-20"
+                          />
+                        ) : (
+                          totalGoal
+                        )}
+                      </td>
                       <td className="p-2 text-gray-800 text-right">
                         {isEditMode ? (
                           <Input
@@ -641,36 +675,59 @@ export default function ProductsCategoryPage() {
                             )}
                           </td>
                           <td className="p-2 text-gray-800">
-                            {!isEditMode && (
-                              editingInventory[variation.var_id] !== undefined ? (
-                                <div className="flex items-center space-x-2">
-                                  <Input
-                                    type="number"
-                                    value={editingInventory[variation.var_id]}
-                                    onChange={(e) => setEditingInventory(prev => ({ ...prev, [variation.var_id]: e.target.value }))}
-                                    className="w-20 bg-white text-gray-800 border-gray-300"
-                                  />
-                                  <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
-                                    <Check className="h-4 w-4 text-green-600" />
-                                  </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(variation.var_id)}>
-                                    <X className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => handleEditInventory(variation.var_id, variation.var_inv)}
-                                  className="border-gray-800"
-                                >
-                                  Edit
+                            {editingInventory[variation.var_id] !== undefined ? (
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  type="number"
+                                  value={editingInventory[variation.var_id].inv}
+                                  onChange={(e) => setEditingInventory(prev => ({ 
+                                    ...prev, 
+                                    [variation.var_id]: { ...prev[variation.var_id], inv: e.target.value }
+                                  }))}
+                                  className="w-20 bg-white text-gray-800 border-gray-300"
+                                />
+                                <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
+                                  <Check className="h-4 w-4 text-green-600" />
                                 </Button>
-                              )
+                                <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(variation.var_id)}>
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleEditInventory(variation.var_id, variation.var_inv, variation.var_goal)}
+                                className="border-gray-800"
+                              >
+                                Edit
+                              </Button>
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">{variation.var_inv}</td>
-                          <td className="p-2 text-gray-800">{variation.var_goal}</td>
+                          <td className="p-2 text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedVariation.var_inv}
+                                onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', parseInt(e.target.value))}
+                                className="w-20"
+                              />
+                            ) : (
+                              variation.var_inv
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-800">
+                            {isEditMode ? (
+                              <Input
+                                type="number"
+                                value={editedVariation.var_goal}
+                                onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', parseInt(e.target.value))}
+                                className="w-20"
+                              />
+                            ) : (
+                              variation.var_goal
+                            )}
+                          </td>
                           <td className="p-2 text-gray-800 text-right">-</td>
                           <td className="p-2 text-gray-800 text-right">-</td>
                         </tr>

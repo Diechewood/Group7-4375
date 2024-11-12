@@ -41,6 +41,11 @@ interface Toast {
   type: 'success' | 'error'
 }
 
+interface EditingValues {
+  inv: string
+  goal: string
+}
+
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -49,7 +54,7 @@ export default function ProductDetailPage() {
   const [variations, setVariations] = useState<ProductVariation[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [editingInventory, setEditingInventory] = useState<{ [key: number]: string }>({})
+  const [editingValues, setEditingValues] = useState<{ [key: number]: EditingValues }>({})
   const [isAddingVariation, setIsAddingVariation] = useState(false)
   const [newVariation, setNewVariation] = useState<NewVariation>({
     var_name: '',
@@ -101,22 +106,26 @@ export default function ProductDetailPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const handleEditInventory = (variationId: number, currentInventory: number) => {
-    setEditingInventory(prev => ({ ...prev, [variationId]: currentInventory.toString() }))
+  const handleEditValues = (variationId: number, currentInventory: number, currentGoal: number) => {
+    setEditingValues(prev => ({ 
+      ...prev, 
+      [variationId]: { inv: currentInventory.toString(), goal: currentGoal.toString() } 
+    }))
   }
 
   const handleCancelEdit = (variationId: number) => {
-    setEditingInventory(prev => {
+    setEditingValues(prev => {
       const next = { ...prev }
       delete next[variationId]
       return next
     })
   }
 
-  const handleUpdateInventory = async (variationId: number) => {
-    const newInventory = parseFloat(editingInventory[variationId])
-    if (isNaN(newInventory)) {
-      showToast("Please enter a valid number for inventory.", "error")
+  const handleUpdateValues = async (variationId: number) => {
+    const newInventory = parseFloat(editingValues[variationId].inv)
+    const newGoal = parseFloat(editingValues[variationId].goal)
+    if (isNaN(newInventory) || isNaN(newGoal)) {
+      showToast("Please enter valid numbers for inventory and goal.", "error")
       return
     }
 
@@ -126,22 +135,22 @@ export default function ProductDetailPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ var_inv: newInventory }),
+        body: JSON.stringify({ var_inv: newInventory, var_goal: newGoal }),
       })
 
-      if (!response.ok) throw new Error('Failed to update inventory')
+      if (!response.ok) throw new Error('Failed to update values')
 
       setVariations(prev =>
         prev.map(v =>
-          v.var_id === variationId ? { ...v, var_inv: newInventory } : v
+          v.var_id === variationId ? { ...v, var_inv: newInventory, var_goal: newGoal } : v
         )
       )
 
       handleCancelEdit(variationId)
-      showToast("Inventory updated successfully", "success")
+      showToast("Values updated successfully", "success")
     } catch (error) {
-      console.error('Error updating inventory:', error)
-      showToast("Failed to update inventory. Please try again.", "error")
+      console.error('Error updating values:', error)
+      showToast("Failed to update values. Please try again.", "error")
     }
   }
 
@@ -269,15 +278,39 @@ export default function ProductDetailPage() {
                 <TableRow key={variation.var_id} className="border-b border-gray-200">
                   <TableCell className="text-black">{variation.var_name}</TableCell>
                   <TableCell className="text-black">
-                    {editingInventory[variation.var_id] !== undefined ? (
+                    {editingValues[variation.var_id] ? (
+                      <Input
+                        type="number"
+                        value={editingValues[variation.var_id].inv}
+                        onChange={(e) => setEditingValues(prev => ({ 
+                          ...prev, 
+                          [variation.var_id]: { ...prev[variation.var_id], inv: e.target.value }
+                        }))}
+                        className="w-20 text-black"
+                      />
+                    ) : (
+                      variation.var_inv
+                    )}
+                  </TableCell>
+                  <TableCell className="text-black">
+                    {editingValues[variation.var_id] ? (
+                      <Input
+                        type="number"
+                        value={editingValues[variation.var_id].goal}
+                        onChange={(e) => setEditingValues(prev => ({ 
+                          ...prev, 
+                          [variation.var_id]: { ...prev[variation.var_id], goal: e.target.value }
+                        }))}
+                        className="w-20 text-black"
+                      />
+                    ) : (
+                      variation.var_goal
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingValues[variation.var_id] ? (
                       <div className="flex items-center space-x-2">
-                        <Input
-                          type="number"
-                          value={editingInventory[variation.var_id]}
-                          onChange={(e) => setEditingInventory(prev => ({ ...prev, [variation.var_id]: e.target.value }))}
-                          className="w-20 text-black"
-                        />
-                        <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
+                        <Button size="sm" variant="ghost" onClick={() => handleUpdateValues(variation.var_id)}>
                           <Check className="h-4 w-4 text-green-600" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(variation.var_id)}>
@@ -285,19 +318,15 @@ export default function ProductDetailPage() {
                         </Button>
                       </div>
                     ) : (
-                      variation.var_inv
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleEditValues(variation.var_id, variation.var_inv, variation.var_goal)}
+                        className="text-black hover:bg-gray-100"
+                      >
+                        Edit
+                      </Button>
                     )}
-                  </TableCell>
-                  <TableCell className="text-black">{variation.var_goal}</TableCell>
-                  <TableCell>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => handleEditInventory(variation.var_id, variation.var_inv)}
-                      className="text-black hover:bg-gray-100"
-                    >
-                      Edit
-                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
