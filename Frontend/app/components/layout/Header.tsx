@@ -11,7 +11,7 @@ export default function Header() {
           <Menu />
         </Button>
         <Link href="/dashboard" className="flex items-center">
-          <Image src="/placeholder.svg" alt="Frosted Fabrics Logo" width={32} height={32} className="mr-2" />
+          <Image src="/images/logo.png" alt="Frosted Fabrics Logo" width={32} height={32} className="mr-2" />
           <h1 className="text-xl font-bold text-white">Frosted Fabrics</h1>
         </Link>
       </div>
