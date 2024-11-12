@@ -36,7 +36,6 @@ This repository contains the backend server code for a web application built usi
 1. Start the Flask server with the following command:
     
     for dev
-    `flask --app main.py run --host=0.0.0.0`
 
     for prod
     `gunicorn --bind 0.0.0.0:5000 main:app`
