@@ -20,6 +20,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { motion } from "framer-motion"
+import { Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import CategoriesPage from '../../../materials/page'
 
 interface Material {
   mat_id: number
@@ -66,6 +72,11 @@ interface EditingValues {
   goal: string
 }
 
+interface NewMaterial {
+  mat_id: number
+  mat_amount: number
+}
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const fetchWithRetry = async (url: string, retries = 3, delayMs = 1000) => {
@@ -106,6 +117,9 @@ export default function ProductDetailPage() {
   const [deletingVariationId, setDeletingVariationId] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lowMaterialAlert, setLowMaterialAlert] = useState<string | null>(null)
+  const [isAddingMaterial, setIsAddingMaterial] = useState(false)
+  const [selectedVariationId, setSelectedVariationId] = useState<number | null>(null)
+  const [newMaterial, setNewMaterial] = useState<NewMaterial>({ mat_id: 0, mat_amount: 0 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -587,6 +601,65 @@ export default function ProductDetailPage() {
     }
   }
 
+  const handleAddMaterial = (variationId: number) => {
+    setSelectedVariationId(variationId)
+    setIsAddingMaterial(true)
+  }
+
+  const handleMaterialSelection = (materialId: number) => {
+    setNewMaterial(prev => ({ ...prev, mat_id: materialId }))
+  }
+
+  const handleMaterialAmountChange = (amount: number) => {
+    setNewMaterial(prev => ({ ...prev, mat_amount: amount }))
+  }
+
+  const handleSaveMaterial = async () => {
+    if (!selectedVariationId || newMaterial.mat_id === 0 || newMaterial.mat_amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please select a material and enter a valid amount.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/variationmaterials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          var_id: selectedVariationId,
+          mat_id: newMaterial.mat_id,
+          mat_amount: newMaterial.mat_amount,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to add material to variation')
+      }
+
+      toast({
+        title: "Success",
+        description: "Material added to variation successfully",
+      })
+
+      // Refresh the variation data
+      await fetchVariationData(selectedVariationId)
+      setIsAddingMaterial(false)
+      setNewMaterial({ mat_id: 0, mat_amount: 0 })
+    } catch (error) {
+      console.error('Error adding material to variation:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add material to variation. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen text-black">Loading...</div>
   }
@@ -741,216 +814,225 @@ export default function ProductDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="mb-6">
-          <h2 className="text-2xl font-semibold mb-6 text-purple-900">Variations</h2>
-          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-purple-200">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-purple-50">
-                    <TableHead className="text-purple-900 font-semibold">Name</TableHead>
-                    <TableHead className="text-purple-900 font-semibold">Inventory</TableHead>
-                    <TableHead className="text-purple-900 font-semibold">Goal</TableHead>
-                    <TableHead className="text-purple-700">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayVariations.map((variation) => (
-                    <Fragment key={variation.var_id}>
-                      <TableRow 
-                        className="border-b border-purple-100 hover:bg-purple-50 transition-colors duration-200"
-                        key={variation.var_id}
-                      >
-                        <TableCell className="text-purple-900">
-                          <div className="flex items-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="p-0 hover:bg-transparent"
-                              onClick={() => toggleVariation(variation.var_id)}
-                            >
-                              {expandedVariations.has(variation.var_id) ? (
-                                <ChevronDown className="h-4 w-4 text-purple-600" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-purple-600" />
-                              )}
-                            </Button>
-                            {isEditMode ? (
-                              <Input
-                                value={variation.var_name}
-                                onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
-                                className="w-full max-w-[200px] ml-2"
-                              />
-                            ) : (
-                              <span className="ml-2 font-medium">{variation.var_name}</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-purple-700">
-                          {isEditMode ? (
-                            <Input
-                              type="number"
-                              value={variation.var_inv === 0 ? '' : variation.var_inv}
-                              onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
-                              className="w-20"
-                            />
-                          ) : (
-                            variation.var_inv
-                          )}
-                        </TableCell>
-                        <TableCell className="text-purple-900 font-semibold">
-                          {isEditMode ? (
-                            <Input
-                              type="number"
-                              value={variation.var_goal}
-                              onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', parseInt(e.target.value))}
-                              className="w-20 font-semibold"
-                            />
-                          ) : (
-                            variation.var_goal
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isEditMode ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDeletingVariationId(variation.var_id)}
-                              className="text-red-500 border-red-300 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDeletingVariationId(variation.var_id)}
-                              className="text-red-500 border-red-300 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      {expandedVariations.has(variation.var_id) && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="bg-purple-50 p-4">
-                            <h4 className="font-medium text-sm mb-2 text-purple-900">Materials Required:</h4>
-                            {variation.materials && variation.materials.length > 0 ? (
-                              <div className="space-y-2">
-                                {variation.materials.map((material) => (
-                                  <div key={material.mat_id} className="flex items-center justify-between text-sm text-purple-700">
-                                    <span>{material.mat_name}</span>
-                                    <div className="text-right">
-                                      <div>{material.mat_amount} {material.meas_unit} per item</div>
-                                      <div>
-                                        {typeof material.mat_inv === 'number' 
-                                          ? `${material.mat_inv.toFixed(2)} ${material.meas_unit} available`
-                                          : 'Inventory not available'
-                                        }
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-purple-700">No materials assigned to this variation.</p>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  ))}
-                  {isAddingVariation ? (
-                    <TableRow className="border-b border-purple-100">
-                      <TableCell>
-                        <Input
-                          value={newVariation.var_name}
-                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_name: e.target.value }))}
-                          placeholder="Variation name"
-                          className="text-purple-900"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={newVariation.var_inv}
-                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_inv: parseInt(e.target.value) }))}
-                          className="w-20 text-purple-900"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={newVariation.var_goal}
-                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_goal: parseInt(e.target.value) }))}
-                          className="w-20 text-purple-900"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={handleAddVariation} 
-                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                            disabled={isSubmittingVariation}
-                          >
-                            {isSubmittingVariation ? (
-                              <span className="animate-pulse">Adding...</span>
-                            ) : (
-                              <Check className="h-4 w-4 text-green-600" />
-                            )}
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => setIsAddingVariation(false)}
-                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                            disabled={isSubmittingVariation}
-                          >
-                            <X className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full bg-purple-600 text-white hover:bg-purple-700"
-                          onClick={() => setIsAddingVariation(true)}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Variation
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+        <div className="mb-6 flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-purple-900">Variations</h2>
+          <Button 
+            onClick={() => setIsAddingVariation(true)} 
+            className="bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Variation
+          </Button>
         </div>
+
+        {displayVariations.map((variation) => (
+          <Fragment key={variation.var_id}>
+            <Card className="mb-4 border-purple-200 shadow-sm rounded-lg overflow-hidden">
+              <CardContent className="p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mr-2 p-0 hover:bg-transparent"
+                      onClick={() => toggleVariation(variation.var_id)}
+                    >
+                      <ChevronDown
+                        className={`h-5 w-5 text-purple-600 transition-transform ${
+                          expandedVariations.has(variation.var_id) ? 'transform rotate-180' : ''
+                        }`}
+                      />
+                    </Button>
+                    <h3 className="text-lg font-semibold text-purple-900">
+                      {isEditMode ? (
+                        <Input
+                          value={variation.var_name}
+                          onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
+                          className="text-lg font-semibold w-full sm:w-auto"
+                        />
+                      ) : (
+                        variation.var_name
+                      )}
+                    </h3>
+                  </div>
+                  {isEditMode ? (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        value={variation.var_inv}
+                        onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
+                        className="w-20 text-right"
+                      />
+                      <span className="text-purple-600">/</span>
+                      <Input
+                        type="number"
+                        value={variation.var_goal}
+                        onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', e.target.value)}
+                        className="w-20 text-right"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-purple-600 font-medium">
+                      {variation.var_inv}/{variation.var_goal}
+                    </div>
+                  )}
+                </div>
+                {expandedVariations.has(variation.var_id) && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold text-purple-900 mb-2">Materials:</h4>
+                    {variation.materials && variation.materials.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-purple-50">
+                            <TableHead className="text-purple-900 font-semibold">Name</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">SKU</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">Brand</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">Category</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">Amount</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">Inventory</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {variation.materials.map((material) => (
+                            <TableRow key={material.mat_id}>
+                              <TableCell>{material.mat_name}</TableCell>
+                              <TableCell>{material.mat_sku}</TableCell>
+                              <TableCell>{material.brand_name}</TableCell>
+                              <TableCell>{material.mc_name}</TableCell>
+                              <TableCell>{material.mat_amount} {material.meas_unit}</TableCell>
+                              <TableCell>{material.mat_inv} {material.meas_unit}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-purple-600">No materials added yet.</p>
+                    )}
+                    {!isEditMode && (
+                      <Button 
+                        onClick={() => handleAddMaterial(variation.var_id)} 
+                        className="mt-4 bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
+                      >
+                        <Plus className="mr-2 h-4 w-4" /> Add Material
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            {!isEditMode && (
+              <div className="flex justify-end mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 border-red-300 hover:bg-red-50 transition-colors duration-200"
+                  onClick={() => setDeletingVariationId(variation.var_id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete Variation
+                </Button>
+              </div>
+            )}
+          </Fragment>
+        ))}
+
+        <AlertDialog open={deletingVariationId !== null} onOpenChange={() => setDeletingVariationId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the variation
+                and all associated data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deletingVariationId && handleDeleteVariation(deletingVariationId)}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog open={isAddingVariation} onOpenChange={() => setIsAddingVariation(false)}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add New Variation</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="name" className="text-right">
+                  Name
+                </label>
+                <Input
+                  id="name"
+                  value={newVariation.var_name}
+                  onChange={(e) => setNewVariation({ ...newVariation, var_name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="inventory" className="text-right">
+                  Inventory
+                </label>
+                <Input
+                  id="inventory"
+                  type="number"
+                  value={newVariation.var_inv}
+                  onChange={(e) => setNewVariation({ ...newVariation, var_inv: parseInt(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="goal" className="text-right">
+                  Goal
+                </label>
+                <Input
+                  id="goal"
+                  type="number"
+                  value={newVariation.var_goal}
+                  onChange={(e) => setNewVariation({ ...newVariation, var_goal: parseInt(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <Button onClick={handleAddVariation} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              {isSubmittingVariation ? 'Adding...' : 'Add Variation'}
+            </Button>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isAddingMaterial} onOpenChange={() => setIsAddingMaterial(false)}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Add Material to Variation</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="h-[400px] overflow-y-auto">
+                <CategoriesPage 
+                  isPopup={true} 
+                  onSelectMaterial={handleMaterialSelection}
+                />
+              </div>
+              <Input
+                type="number"
+                placeholder="Amount required"
+                value={newMaterial.mat_amount || ''}
+                onChange={(e) => handleMaterialAmountChange(parseFloat(e.target.value))}
+                className="mt-2"
+              />
+              <Button 
+                onClick={handleSaveMaterial} 
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                disabled={newMaterial.mat_id === 0}
+              >
+                Save Material
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </motion.div>
-      <AlertDialog open={deletingVariationId !== null} onOpenChange={() => setDeletingVariationId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this variation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the variation and all associated data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deletingVariationId && handleDeleteVariation(deletingVariationId)}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </motion.div>
   )
 }
