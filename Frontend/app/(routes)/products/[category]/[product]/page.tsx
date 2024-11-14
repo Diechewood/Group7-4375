@@ -4,7 +4,7 @@ import { useState, useEffect, Fragment, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Check, X, Plus, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, X, Plus, ChevronDown, ChevronRight, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
@@ -18,6 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { motion } from "framer-motion"
 
 interface Material {
   mat_id: number
@@ -103,6 +105,7 @@ export default function ProductDetailPage() {
   const [editedVariations, setEditedVariations] = useState<{[key: number]: ProductVariation}>({})
   const [deletingVariationId, setDeletingVariationId] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [lowMaterialAlert, setLowMaterialAlert] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -259,11 +262,7 @@ export default function ProductDetailPage() {
 
     const hasEnoughMaterials = calculateRequiredMaterials(variation, newInventory)
     if (!hasEnoughMaterials) {
-      toast({
-        title: "Error",
-        description: "Insufficient materials available for this inventory update.",
-        variant: "destructive",
-      })
+      setLowMaterialAlert(`Insufficient materials available for ${variation.var_name}. Please check material inventory.`)
       return
     }
 
@@ -388,24 +387,26 @@ export default function ProductDetailPage() {
 
   const handleSaveEdit = async () => {
     if (!editedProduct) return
-  
+
     setIsSaving(true)
+    setIsEditMode(false) // Exit edit mode immediately
+
     try {
       // Optimistically update the UI
       setProduct(editedProduct)
       setVariations(Object.values(editedVariations))
-  
+
       // First validate all inventory changes
       const inventoryUpdatesValid = Object.values(editedVariations).every(variation => {
         const originalVariation = variations.find(v => v.var_id === variation.var_id)
         if (!originalVariation) return true
         return calculateRequiredMaterials(variation, variation.var_inv)
       })
-  
+
       if (!inventoryUpdatesValid) {
         throw new Error('Insufficient materials for one or more inventory updates')
       }
-  
+
       const productUpdate = fetch(`http://localhost:5000/api/products/${editedProduct.prod_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -416,14 +417,14 @@ export default function ProductDetailPage() {
           prod_time: editedProduct.prod_time
         })
       })
-  
+
       // Update variations and their materials
       const variationUpdates = Object.values(editedVariations).map(async variation => {
         const originalVariation = variations.find(v => v.var_id === variation.var_id)
         if (originalVariation && variation.var_inv !== originalVariation.var_inv) {
           variation = updateMaterialInventory(variation, variation.var_inv, originalVariation.var_inv)
         }
-  
+
         return fetch(`http://localhost:5000/api/productvariations/${variation.var_id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -434,9 +435,9 @@ export default function ProductDetailPage() {
           })
         })
       })
-  
+
       const results = await Promise.all([productUpdate, ...variationUpdates])
-  
+
       if (results.every(res => res.ok)) {
         setIsEditMode(false)
         setEditedProduct(null)
@@ -445,7 +446,7 @@ export default function ProductDetailPage() {
           title: "Success",
           description: "Changes saved successfully",
         })
-  
+
         // Fetch updated data in the background
         fetchData()
       } else {
@@ -461,6 +462,7 @@ export default function ProductDetailPage() {
         description: error instanceof Error ? error.message : "Failed to save changes. Please try again.",
         variant: "destructive",
       })
+      setIsEditMode(true) // Re-enter edit mode if there's an error
     } finally {
       setIsSaving(false)
     }
@@ -488,11 +490,7 @@ export default function ProductDetailPage() {
           const hasEnoughMaterials = calculateRequiredMaterials(variation, newInventory)
         
           if (!hasEnoughMaterials) {
-            toast({
-              title: "Error",
-              description: "Insufficient materials available for this inventory update.",
-              variant: "destructive",
-            })
+            setLowMaterialAlert(`Insufficient materials available for ${variation.var_name}. Please check material inventory.`)
             return prev // Return previous state without updates
           }
         }
@@ -611,91 +609,121 @@ export default function ProductDetailPage() {
   const totalGoal = displayVariations.reduce((sum, v) => sum + v.var_goal, 0)
 
   return (
-    <div className="p-6 relative">
-      <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <motion.div 
+      className="min-h-screen p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <motion.div 
+        className="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-8"
+        initial={{ y: 20 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+      >
         <Button 
           variant="ghost" 
-          className="mb-6 text-black hover:bg-gray-100" 
+          className="mb-6 text-purple-700 hover:bg-purple-50" 
           onClick={() => router.back()}
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> Back
         </Button>
 
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold mb-1 text-black">
+        {lowMaterialAlert && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Warning</AlertTitle>
+            <AlertDescription>{lowMaterialAlert}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+          <div className="mb-4 sm:mb-0">
+            <h1 className="text-3xl font-bold mb-1 text-purple-900">
               {isEditMode ? (
                 <Input
                   value={displayProduct.prod_name}
                   onChange={(e) => handleProductEdit('prod_name', e.target.value)}
-                  className="text-2xl font-bold"
+                  className="text-3xl font-bold w-full sm:w-auto"
                 />
               ) : (
                 displayProduct.prod_name
               )}
             </h1>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-purple-600 font-medium">
               {totalInventory}/{totalGoal} {category?.pc_name.toUpperCase()}
             </div>
           </div>
           {isEditMode ? (
-            <div className="space-x-2">
-              <Button onClick={handleSaveEdit} className="bg-green-500 hover:bg-green-600 text-white" disabled={isSaving}>
+            <div className="space-y-2 sm:space-y-0 sm:space-x-2 flex flex-col sm:flex-row">
+              <Button 
+                onClick={handleSaveEdit} 
+                className="bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200 w-full sm:w-auto" 
+                disabled={isSaving}
+              >
                 <Check className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save'}
               </Button>
-              <Button onClick={handleCancelEditMode} variant="outline" className="text-red-500 border-red-500 hover:bg-red-50">
+              <Button 
+                onClick={handleCancelEditMode} 
+                variant="outline" 
+                className="text-purple-600 border-purple-300 hover:bg-purple-50 transition-colors duration-200 w-full sm:w-auto"
+              >
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
             </div>
           ) : (
-            <Button onClick={handleStartEdit} variant="outline" className="text-blue-500 border-blue-500 hover:bg-blue-50">
+            <Button 
+              onClick={handleStartEdit} 
+              variant="outline" 
+              className="text-purple-600 border-purple-300 hover:bg-purple-50 transition-colors duration-200 w-full sm:w-auto"
+            >
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </Button>
           )}
         </div>
 
-        <Card className="mb-6 border-0 shadow-sm rounded-lg">
-          <CardContent className="p-4">
+        <Card className="mb-8 border-purple-200 shadow-md rounded-lg overflow-hidden">
+          <CardContent className="p-6 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-black font-medium">Cost</TableHead>
-                  <TableHead className="text-black font-medium">MSRP</TableHead>
-                  <TableHead className="text-black font-medium">Profit</TableHead>
-                  <TableHead className="text-black font-medium">Margin</TableHead>
-                  <TableHead className="text-black font-medium">Time</TableHead>
-                  <TableHead className="text-black font-medium">$/hour</TableHead>
+                <TableRow className="bg-purple-50">
+                  <TableHead className="text-purple-900 font-semibold">Cost</TableHead>
+                  <TableHead className="text-purple-900 font-semibold">MSRP</TableHead>
+                  <TableHead className="text-purple-700">Profit</TableHead>
+                  <TableHead className="text-purple-700">Margin</TableHead>
+                  <TableHead className="text-purple-700">Time</TableHead>
+                  <TableHead className="text-purple-700">$/hour</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow>
-                  <TableCell className="text-black">
+                  <TableCell className="text-purple-900 font-bold">
                     {isEditMode ? (
                       <Input
                         type="number"
                         value={displayProduct.prod_cost}
                         onChange={(e) => handleProductEdit('prod_cost', parseFloat(e.target.value))}
-                        className="w-24"
+                        className="w-24 font-bold"
                       />
                     ) : (
                       `$${typeof displayProduct.prod_cost === 'number' ? displayProduct.prod_cost.toFixed(2) : displayProduct.prod_cost}`
                     )}
                   </TableCell>
-                  <TableCell className="text-black">
+                  <TableCell className="text-purple-900 font-bold">
                     {isEditMode ? (
                       <Input
                         type="number"
                         value={displayProduct.prod_msrp}
                         onChange={(e) => handleProductEdit('prod_msrp', parseFloat(e.target.value))}
-                        className="w-24"
+                        className="w-24 font-bold"
                       />
                     ) : (
                       `$${typeof displayProduct.prod_msrp === 'number' ? displayProduct.prod_msrp.toFixed(2) : displayProduct.prod_msrp}`
                     )}
                   </TableCell>
-                  <TableCell className="text-black">${profit.toFixed(2)}</TableCell>
-                  <TableCell className="text-black">{margin.toFixed(2)}%</TableCell>
-                  <TableCell className="text-black">
+                  <TableCell className="text-purple-700">${profit.toFixed(2)}</TableCell>
+                  <TableCell className="text-purple-700">{margin.toFixed(2)}%</TableCell>
+                  <TableCell className="text-purple-700">
                     {isEditMode ? (
                       <Input
                         value={displayProduct.prod_time}
@@ -706,200 +734,207 @@ export default function ProductDetailPage() {
                       displayProduct.prod_time
                     )}
                   </TableCell>
-                  <TableCell className="text-black">${hourlyRate.toFixed(2)}</TableCell>
+                  <TableCell className="text-purple-700">${hourlyRate.toFixed(2)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        <div className="mb-4">
-          <h2 className="text-xl font-semibold mb-4 text-black">Variations</h2>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b border-gray-200">
-                <TableHead className="text-black font-medium">Name</TableHead>
-                <TableHead className="text-black font-medium">Inventory</TableHead>
-                <TableHead className="text-black font-medium">Goal</TableHead>
-                <TableHead className="text-black font-medium">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {displayVariations.map((variation) => (
-                <Fragment key={variation.var_id}>
-                  <TableRow className="border-b border-gray-300">
-                    <TableCell className="text-black">
-                      <div className="flex items-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-0 hover:bg-transparent"
-                          onClick={() => toggleVariation(variation.var_id)}
-                        >
-                          {expandedVariations.has(variation.var_id) ? (
-                            <ChevronDown className="h-4 w-4 text-gray-600" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-gray-600" />
-                          )}
-                        </Button>
-                        {isEditMode ? (
-                          <Input
-                            value={variation.var_name}
-                            onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
-                            className="w-full max-w-[200px] ml-2"
-                          />
-                        ) : (
-                          <span className="ml-2">{variation.var_name}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-black">
-                      {isEditMode ? (
-                        <Input
-                          type="number"
-                          value={variation.var_inv === 0 ? '' : variation.var_inv}
-                          onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
-                          className="w-20"
-                        />
-                      ) : (
-                        variation.var_inv
-                      )}
-                    </TableCell>
-                    <TableCell className="text-black">
-                      {isEditMode ? (
-                        <Input
-                          type="number"
-                          value={variation.var_goal}
-                          onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', parseInt(e.target.value))}
-                          className="w-20"
-                        />
-                      ) : (
-                        variation.var_goal
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isEditMode ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDeletingVariationId(variation.var_id)}
-                          className="text-red-500 border-red-500 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDeletingVariationId(variation.var_id)}
-                          className="text-red-500 border-red-500 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold mb-6 text-purple-900">Variations</h2>
+          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-purple-200">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-purple-50">
+                    <TableHead className="text-purple-900 font-semibold">Name</TableHead>
+                    <TableHead className="text-purple-900 font-semibold">Inventory</TableHead>
+                    <TableHead className="text-purple-900 font-semibold">Goal</TableHead>
+                    <TableHead className="text-purple-700">Actions</TableHead>
                   </TableRow>
-                  {expandedVariations.has(variation.var_id) && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="bg-gray-50 p-4">
-                        <h4 className="font-medium text-sm mb-2 text-black">Materials Required:</h4>
-                        {variation.materials && variation.materials.length > 0 ? (
-                          <div className="space-y-2">
-                            {variation.materials.map((material) => (
-                              <div key={material.mat_id} className="flex items-center justify-between text-sm text-black">
-                                <span>{material.mat_name}</span>
-                                <div className="text-right">
-                                  <div>{material.mat_amount} {material.meas_unit} per item</div>
-                                  <div>
-                                    {typeof material.mat_inv === 'number' 
-                                      ? `${material.mat_inv.toFixed(2)} ${material.meas_unit} available`
-                                      : 'Inventory not available'
-                                    }
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                </TableHeader>
+                <TableBody>
+                  {displayVariations.map((variation) => (
+                    <Fragment key={variation.var_id}>
+                      <TableRow 
+                        className="border-b border-purple-100 hover:bg-purple-50 transition-colors duration-200"
+                        key={variation.var_id}
+                      >
+                        <TableCell className="text-purple-900">
+                          <div className="flex items-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="p-0 hover:bg-transparent"
+                              onClick={() => toggleVariation(variation.var_id)}
+                            >
+                              {expandedVariations.has(variation.var_id) ? (
+                                <ChevronDown className="h-4 w-4 text-purple-600" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-purple-600" />
+                              )}
+                            </Button>
+                            {isEditMode ? (
+                              <Input
+                                value={variation.var_name}
+                                onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
+                                className="w-full max-w-[200px] ml-2"
+                              />
+                            ) : (
+                              <span className="ml-2 font-medium">{variation.var_name}</span>
+                            )}
                           </div>
-                        ) : (
-                          <p className="text-sm text-black">No materials assigned to this variation.</p>
-                        )}
+                        </TableCell>
+                        <TableCell className="text-purple-700">
+                          {isEditMode ? (
+                            <Input
+                              type="number"
+                              value={variation.var_inv === 0 ? '' : variation.var_inv}
+                              onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
+                              className="w-20"
+                            />
+                          ) : (
+                            variation.var_inv
+                          )}
+                        </TableCell>
+                        <TableCell className="text-purple-900 font-semibold">
+                          {isEditMode ? (
+                            <Input
+                              type="number"
+                              value={variation.var_goal}
+                              onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', parseInt(e.target.value))}
+                              className="w-20 font-semibold"
+                            />
+                          ) : (
+                            variation.var_goal
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditMode ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDeletingVariationId(variation.var_id)}
+                              className="text-red-500 border-red-300 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDeletingVariationId(variation.var_id)}
+                              className="text-red-500 border-red-300 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {expandedVariations.has(variation.var_id) && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="bg-purple-50 p-4">
+                            <h4 className="font-medium text-sm mb-2 text-purple-900">Materials Required:</h4>
+                            {variation.materials && variation.materials.length > 0 ? (
+                              <div className="space-y-2">
+                                {variation.materials.map((material) => (
+                                  <div key={material.mat_id} className="flex items-center justify-between text-sm text-purple-700">
+                                    <span>{material.mat_name}</span>
+                                    <div className="text-right">
+                                      <div>{material.mat_amount} {material.meas_unit} per item</div>
+                                      <div>
+                                        {typeof material.mat_inv === 'number' 
+                                          ? `${material.mat_inv.toFixed(2)} ${material.meas_unit} available`
+                                          : 'Inventory not available'
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-purple-700">No materials assigned to this variation.</p>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  ))}
+                  {isAddingVariation ? (
+                    <TableRow className="border-b border-purple-100">
+                      <TableCell>
+                        <Input
+                          value={newVariation.var_name}
+                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_name: e.target.value }))}
+                          placeholder="Variation name"
+                          className="text-purple-900"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={newVariation.var_inv}
+                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_inv: parseInt(e.target.value) }))}
+                          className="w-20 text-purple-900"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={newVariation.var_goal}
+                          onChange={(e) => setNewVariation(prev => ({ ...prev, var_goal: parseInt(e.target.value) }))}
+                          className="w-20 text-purple-900"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={handleAddVariation} 
+                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                            disabled={isSubmittingVariation}
+                          >
+                            {isSubmittingVariation ? (
+                              <span className="animate-pulse">Adding...</span>
+                            ) : (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setIsAddingVariation(false)}
+                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                            disabled={isSubmittingVariation}
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full bg-purple-600 text-white hover:bg-purple-700"
+                          onClick={() => setIsAddingVariation(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Variation
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )}
-                </Fragment>
-              ))}
-              {isAddingVariation ? (
-                <TableRow className="border-b border-gray-200">
-                  <TableCell>
-                    <Input
-                      value={newVariation.var_name}
-                      onChange={(e) => setNewVariation(prev => ({ ...prev, var_name: e.target.value }))}
-                      placeholder="Variation name"
-                      className="text-black"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      value={newVariation.var_inv}
-                      onChange={(e) => setNewVariation(prev => ({ ...prev, var_inv: parseInt(e.target.value) }))}
-                      className="w-20 text-black"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      value={newVariation.var_goal}
-                      onChange={(e) => setNewVariation(prev => ({ ...prev, var_goal: parseInt(e.target.value) }))}
-                      className="w-20 text-black"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={handleAddVariation} 
-                        className="text-black hover:bg-gray-100"
-                        disabled={isSubmittingVariation}
-                      >
-                        {isSubmittingVariation ? (
-                          <span className="animate-pulse">Adding...</span>
-                        ) : (
-                          <Check className="h-4 w-4 text-green-600" />
-                        )}
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => setIsAddingVariation(false)}
-                        className="text-black hover:bg-gray-100"
-                        disabled={isSubmittingVariation}
-                      >
-                        <X className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="w-full bg-[#3b3b99] text-white hover:bg-[#2f2f7a]"
-                      onClick={() => setIsAddingVariation(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Variation
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </div>
-      </div>
+      </motion.div>
       <AlertDialog open={deletingVariationId !== null} onOpenChange={() => setDeletingVariationId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -916,6 +951,6 @@ export default function ProductDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </motion.div>
   )
 }
