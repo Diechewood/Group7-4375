@@ -414,7 +414,7 @@ export default function CategoryPage() {
                   Inv ({materials[0]?.meas_unit || 'units'})
                 </th>
                 {!isEditMode && (
-                  <th className="p-2 text-gray-800 text-left font-semibold">Edit Inv</th>
+                  <th className="p-2 text-gray-800 text-left font-semibold">Quick Edit</th>
                 )}
                 <th className="p-2 text-gray-800 text-left font-semibold">
                   Alert ({materials[0]?.meas_unit || 'units'})
