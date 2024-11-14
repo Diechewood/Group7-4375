@@ -168,76 +168,51 @@ def productsDelete(resourceid=None):
 @app.route('/api/productvariations', methods=['GET'])
 @app.route('/api/productvariations/<int:resourceid>', methods=['GET'])
 def productvariationsGet(resourceid=None):
-    query_results = None
     conn = None
     try:
         conn = get_db_connection()
         
+        base_query = """
+            SELECT 
+                pv.*,
+                JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'mat_id', m.mat_id,
+                        'mat_name', m.mat_name,
+                        'mat_sku', m.mat_sku,
+                        'mat_amount', vm.mat_amount,
+                        'mat_inv', m.mat_inv,
+                        'brand_name', mb.brand_name,
+                        'mc_name', mc.mc_name,
+                        'meas_unit', mm.meas_unit
+                    )
+                ) as materials
+            FROM frostedfabrics.product_variations pv
+            LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
+            LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+            LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+            LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+            LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
+        """
+        
         if resourceid is not None:
-            query = """
-                SELECT 
-                    pv.*,
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            'mat_id', m.mat_id,
-                            'mat_name', m.mat_name,
-                            'mat_sku', m.mat_sku,
-                            'mat_amount', vm.mat_amount,
-                            'brand_name', mb.brand_name,
-                            'mc_name', mc.mc_name,
-                            'meas_unit', mm.meas_unit
-                        )
-                    ) as materials
-                FROM frostedfabrics.product_variations pv
-                LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
-                LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
-                LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
-                LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
-                LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
-                WHERE pv.var_id = %s
-                GROUP BY pv.var_id
-            """
+            query = base_query + " WHERE pv.var_id = %s GROUP BY pv.var_id"
             params = (resourceid,)
         else:
             product = request.args.get('product')
-            query = """
-                SELECT 
-                    pv.*,
-                    JSON_ARRAYAGG(
-                        IF(m.mat_id IS NOT NULL,
-                            JSON_OBJECT(
-                                'mat_id', m.mat_id,
-                                'mat_name', m.mat_name,
-                                'mat_sku', m.mat_sku,
-                                'mat_amount', vm.mat_amount,
-                                'brand_name', mb.brand_name,
-                                'mc_name', mc.mc_name,
-                                'meas_unit', mm.meas_unit
-                            ),
-                            NULL
-                        )
-                    ) as materials
-                FROM frostedfabrics.product_variations pv
-                LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
-                LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
-                LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
-                LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
-                LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
-            """
-            params = None
             if product:
-                query += " WHERE pv.prod_id = %s"
+                query = base_query + " WHERE pv.prod_id = %s GROUP BY pv.var_id"
                 params = (product,)
-            query += " GROUP BY pv.var_id"
+            else:
+                query = base_query + " GROUP BY pv.var_id"
+                params = None
 
-        logger.info(f"Executing query: {query} with params: {params}")
         query_results = sql.execute_read_query(conn, query, params)
         
         if query_results is None:
-            logger.error("Query returned None")
             return make_response(jsonify({"error": "Database query failed"}), 500)
         
-        # Process the materials JSON string and handle NULL values
+        # Process the materials JSON string
         for result in query_results:
             try:
                 materials = json.loads(result['materials'])
@@ -246,16 +221,16 @@ def productvariationsGet(resourceid=None):
             except (json.JSONDecodeError, TypeError):
                 result['materials'] = []
         
-        logger.info(f"Query results count: {len(query_results)}")
-        
         if resourceid is not None:
-            return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
-        else:
-            return make_response(jsonify(query_results), 200)
+            if not query_results:
+                return make_response(jsonify({"error": "Resource not found"}), 404)
+            return make_response(jsonify(query_results[0]), 200)
+        
+        return make_response(jsonify(query_results), 200)
+        
     except Exception as e:
         logger.error(f"Error in productvariationsGet: {str(e)}")
-        logger.error(traceback.format_exc())
-        return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
     finally:
         if conn:
             conn.close()
@@ -292,6 +267,50 @@ def productvariationsEdit(resourceid=None):
     conn = None
     try:
         conn = get_db_connection()
+        
+        # Get current variation data to calculate inventory difference
+        current_query = """
+            SELECT var_inv, var_id
+            FROM frostedfabrics.product_variations 
+            WHERE var_id = %s
+        """
+        current_data = sql.execute_read_query(conn, current_query, (resourceid,))
+        
+        if not current_data:
+            return make_response(jsonify({"error": "Variation not found"}), 404)
+            
+        current_inv = current_data[0]['var_inv']
+        new_inv = request_data.get('var_inv', current_inv)
+        inv_difference = new_inv - current_inv
+        
+        if inv_difference != 0:
+            # Get all materials required for this variation
+            materials_query = """
+                SELECT vm.mat_id, vm.mat_amount, m.mat_inv
+                FROM frostedfabrics.variation_materials vm
+                JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+                WHERE vm.var_id = %s
+            """
+            materials = sql.execute_read_query(conn, materials_query, (resourceid,))
+            
+            # Calculate and validate new material inventories
+            for material in materials:
+                new_mat_inv = material['mat_inv'] - (material['mat_amount'] * inv_difference)
+                if new_mat_inv < 0:
+                    return make_response(jsonify({
+                        "error": "Insufficient material inventory",
+                        "material_id": material['mat_id']
+                    }), 400)
+                
+                # Update material inventory
+                update_material_query = """
+                    UPDATE frostedfabrics.materials 
+                    SET mat_inv = %s 
+                    WHERE mat_id = %s
+                """
+                sql.execute_query(conn, update_material_query, (new_mat_inv, material['mat_id']))
+        
+        # Update the variation
         query = "UPDATE frostedfabrics.product_variations SET "
         params = []
         update_fields = ['prod_id', 'var_name', 'var_inv', 'var_goal', 'img_id']
@@ -306,7 +325,35 @@ def productvariationsEdit(resourceid=None):
         params.append(resourceid)
 
         sql.execute_query(conn, query, tuple(params))
-        return make_response("", 200)
+        
+        # Return updated variation data
+        get_variation_query = """
+            SELECT pv.*, 
+                   JSON_ARRAYAGG(
+                       JSON_OBJECT(
+                           'mat_id', m.mat_id,
+                           'mat_name', m.mat_name,
+                           'mat_sku', m.mat_sku,
+                           'mat_amount', vm.mat_amount,
+                           'mat_inv', m.mat_inv,
+                           'brand_name', mb.brand_name,
+                           'mc_name', mc.mc_name,
+                           'meas_unit', mm.meas_unit
+                       )
+                   ) as materials
+            FROM frostedfabrics.product_variations pv
+            LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
+            LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+            LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+            LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+            LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
+            WHERE pv.var_id = %s
+            GROUP BY pv.var_id
+        """
+        updated_variation = sql.execute_read_query(conn, get_variation_query, (resourceid,))
+        
+        return make_response(jsonify(updated_variation[0]), 200)
+        
     except Exception as e:
         logger.error(f"Error in productvariationsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
