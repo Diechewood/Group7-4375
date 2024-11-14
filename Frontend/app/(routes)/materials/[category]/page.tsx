@@ -173,6 +173,20 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
     }
   }, [fetchData, retryCount])
 
+  useEffect(() => {
+    const abortController = new AbortController()
+    const signal = abortController.signal
+
+    fetchData(signal)
+
+    const retryTimer = retryCount > 0 && retryCount < 3 ? setTimeout(() => fetchData(signal), 1000) : null
+
+    return () => {
+      abortController.abort()
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [fetchData, retryCount])
+
   const filteredMaterials = materials.filter(material => {
     const brand = brands.find(b => b.brand_id === material.brand_id)
     return searchTerm === '' || 
@@ -428,11 +442,19 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
 
     setIsSubmitting(true)
     try {
-      // Get the mc_id from the first material in the category
-      const categoryMcId = materials[0]?.mc_id
-      if (!categoryMcId) {
-        throw new Error('Category ID not found')
+      // Fetch the category information to get the mc_id
+      const categoryResponse = await fetch(`http://localhost:5000/api/materialcategories?mc_name=${encodeURIComponent(decodedCategory)}`)
+      
+      if (!categoryResponse.ok) {
+        throw new Error(`Failed to fetch category information: ${categoryResponse.statusText}`)
       }
+
+      const categoryData = await categoryResponse.json()
+      if (!categoryData || categoryData.length === 0) {
+        throw new Error(`Category "${decodedCategory}" not found`)
+      }
+
+      const categoryId = categoryData[0].mc_id
 
       const response = await fetch('http://localhost:5000/api/materialbrands', {
         method: 'POST',
@@ -442,7 +464,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
         body: JSON.stringify({
           brand_name: newBrandData.brand_name,
           brand_price: parseFloat(newBrandData.brand_price),
-          mc_id: categoryMcId,
+          mc_id: categoryId,
           img_id: null
         }),
       })
