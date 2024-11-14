@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, Fragment, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -102,6 +102,7 @@ export default function ProductDetailPage() {
   const [editedProduct, setEditedProduct] = useState<Product | null>(null)
   const [editedVariations, setEditedVariations] = useState<{[key: number]: ProductVariation}>({})
   const [deletingVariationId, setDeletingVariationId] = useState<number | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -187,22 +188,27 @@ export default function ProductDetailPage() {
     })
   }
 
-  const updateMaterialInventory = async (variation: ProductVariation, newInventory: number) => {
-    if (!variation.materials) return
+  const updateMaterialInventory = (variation: ProductVariation, newInventory: number, originalInventory: number) => {
+    if (!variation.materials) return variation
 
-    const inventoryDiff = newInventory - variation.var_inv
-    const materialUpdates = variation.materials.map(material => {
-      const requiredAmount = material.mat_amount * inventoryDiff
-      const newMatInventory = material.mat_inv - requiredAmount
-      
-      return fetch(`http://localhost:5000/api/materials/${material.mat_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mat_inv: newMatInventory })
-      })
+    const inventoryDiff = newInventory - originalInventory
+    const updatedMaterials = variation.materials.map(material => {
+      if (inventoryDiff > 0) {
+        // Only decrease material inventory when increasing product inventory
+        const requiredAmount = material.mat_amount * inventoryDiff
+        const newMatInventory = material.mat_inv - requiredAmount
+        return { ...material, mat_inv: newMatInventory }
+      } else if (inventoryDiff < 0 && variation.var_inv > originalInventory) {
+        // Only increase material inventory when decreasing product inventory,
+        // and only if the new inventory is still above the original inventory
+        const returnedAmount = material.mat_amount * Math.min(Math.abs(inventoryDiff), variation.var_inv - originalInventory)
+        const newMatInventory = material.mat_inv + returnedAmount
+        return { ...material, mat_inv: newMatInventory }
+      }
+      return material
     })
 
-    await Promise.all(materialUpdates)
+    return { ...variation, materials: updatedMaterials }
   }
 
   const fetchVariationData = async (variationId: number) => {
@@ -220,6 +226,14 @@ export default function ProductDetailPage() {
       })
     }
   }
+
+  const updateVariationOptimistically = useCallback((variationId: number, newData: Partial<ProductVariation>) => {
+    setVariations(prevVariations => 
+      prevVariations.map(v => 
+        v.var_id === variationId ? { ...v, ...newData } : v
+      )
+    )
+  }, [])
 
   const handleUpdateValues = async (variationId: number) => {
     const newInventory = parseFloat(editingValues[variationId].inv)
@@ -253,9 +267,11 @@ export default function ProductDetailPage() {
       return
     }
 
-    try {
-      await updateMaterialInventory(variation, newInventory)
+    // Optimistically update the UI
+    const updatedVariation = updateMaterialInventory({ ...variation, var_inv: newInventory, var_goal: newGoal }, newInventory, variation.var_inv)
+    updateVariationOptimistically(variationId, updatedVariation)
 
+    try {
       const response = await fetch(`http://localhost:5000/api/productvariations/${variationId}`, {
         method: 'PATCH',
         headers: {
@@ -268,25 +284,29 @@ export default function ProductDetailPage() {
         throw new Error('Failed to update values')
       }
 
-      // Fetch all updated variations
-      const updatedVariations = await Promise.all(
-        variations.map(v => fetchVariationData(v.var_id))
-      )
-      
-      setVariations(updatedVariations)
-
-      handleCancelEdit(variationId)
       toast({
         title: "Success",
         description: "Values updated successfully",
       })
+
+      // Fetch the updated variation data in the background
+      fetchVariationData(variationId).then(updatedData => {
+        if (updatedData) {
+          updateVariationOptimistically(variationId, updatedData)
+        }
+      })
+
     } catch (error) {
       console.error('Error updating values:', error)
+      // Revert the optimistic update
+      updateVariationOptimistically(variationId, variation)
       toast({
         title: "Error",
         description: "Failed to update values. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      handleCancelEdit(variationId)
     }
   }
 
@@ -368,20 +388,24 @@ export default function ProductDetailPage() {
 
   const handleSaveEdit = async () => {
     if (!editedProduct) return
-
-    setIsLoading(true)
+  
+    setIsSaving(true)
     try {
+      // Optimistically update the UI
+      setProduct(editedProduct)
+      setVariations(Object.values(editedVariations))
+  
       // First validate all inventory changes
       const inventoryUpdatesValid = Object.values(editedVariations).every(variation => {
         const originalVariation = variations.find(v => v.var_id === variation.var_id)
         if (!originalVariation) return true
         return calculateRequiredMaterials(variation, variation.var_inv)
       })
-
+  
       if (!inventoryUpdatesValid) {
         throw new Error('Insufficient materials for one or more inventory updates')
       }
-
+  
       const productUpdate = fetch(`http://localhost:5000/api/products/${editedProduct.prod_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -392,14 +416,14 @@ export default function ProductDetailPage() {
           prod_time: editedProduct.prod_time
         })
       })
-
+  
       // Update variations and their materials
       const variationUpdates = Object.values(editedVariations).map(async variation => {
         const originalVariation = variations.find(v => v.var_id === variation.var_id)
         if (originalVariation && variation.var_inv !== originalVariation.var_inv) {
-          await updateMaterialInventory(variation, variation.var_inv)
+          variation = updateMaterialInventory(variation, variation.var_inv, originalVariation.var_inv)
         }
-
+  
         return fetch(`http://localhost:5000/api/productvariations/${variation.var_id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -410,20 +434,10 @@ export default function ProductDetailPage() {
           })
         })
       })
-
+  
       const results = await Promise.all([productUpdate, ...variationUpdates])
-
+  
       if (results.every(res => res.ok)) {
-        setProduct(editedProduct)
-        
-        // Fetch updated variation data
-        const updatedVariations = await Promise.all(
-          Object.values(editedVariations).map(variation => 
-            fetchVariationData(variation.var_id)
-          )
-        )
-        
-        setVariations(updatedVariations)
         setIsEditMode(false)
         setEditedProduct(null)
         setEditedVariations({})
@@ -431,18 +445,24 @@ export default function ProductDetailPage() {
           title: "Success",
           description: "Changes saved successfully",
         })
+  
+        // Fetch updated data in the background
+        fetchData()
       } else {
         throw new Error('Some updates failed')
       }
     } catch (error) {
       console.error('Error saving changes:', error)
+      // Revert optimistic updates
+      setProduct(product)
+      setVariations(variations)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save changes. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
@@ -452,18 +472,60 @@ export default function ProductDetailPage() {
 
   const handleVariationEdit = (variationId: number, field: keyof ProductVariation, value: string | number) => {
     setEditedVariations(prev => {
-      const variation = prev[variationId]
+      const variation = { ...prev[variationId] }
+      const originalVariation = variations.find(v => v.var_id === variationId)
+    
+      if (field === 'var_inv' && originalVariation) {
+        const originalVariationInventory = originalVariation.var_inv
+        const newInventory = Math.max(0, parseInt(value as string, 10))
+        const inventoryDiff = newInventory - variation.var_inv
       
-      if (field === 'var_inv' && typeof value === 'number') {
-        const hasEnoughMaterials = calculateRequiredMaterials(variation, value)
+        if (Number.isNaN(newInventory)) {
+          return prev // Return previous state without updates if input is invalid
+        }
+
+        if (inventoryDiff > 0) {
+          const hasEnoughMaterials = calculateRequiredMaterials(variation, newInventory)
         
-        if (!hasEnoughMaterials) {
-          toast({
-            title: "Error",
-            description: "Insufficient materials available for this inventory update.",
-            variant: "destructive",
+          if (!hasEnoughMaterials) {
+            toast({
+              title: "Error",
+              description: "Insufficient materials available for this inventory update.",
+              variant: "destructive",
+            })
+            return prev // Return previous state without updates
+          }
+        }
+
+        // Update material inventories in real-time
+        if (variation.materials) {
+          variation.materials = variation.materials.map(material => {
+            const originalMaterialInventory = originalVariation.materials?.find(m => m.mat_id === material.mat_id)?.mat_inv || 0
+            const originalVariationInventory = originalVariation.var_inv
+            const materialUsed = material.mat_amount * inventoryDiff
+            let newMatInventory = material.mat_inv
+
+            if (newInventory > originalVariationInventory) {
+              // Decrease material inventory when product inventory increases above original
+              newMatInventory = Math.max(0, originalMaterialInventory - material.mat_amount * (newInventory - originalVariationInventory))
+            } else if (newInventory < originalVariationInventory) {
+              // Increase material inventory when product inventory decreases, but not above the original amount
+              newMatInventory = Math.min(originalMaterialInventory, originalMaterialInventory - material.mat_amount * (newInventory - originalVariationInventory))
+            } else {
+              // If inventory is back to original, reset material inventory
+              newMatInventory = originalMaterialInventory
+            }
+
+            return { ...material, mat_inv: newMatInventory }
           })
-          return prev // Return previous state without updates
+        }
+
+        return {
+          ...prev,
+          [variationId]: {
+            ...variation,
+            var_inv: newInventory
+          }
         }
       }
 
@@ -471,7 +533,7 @@ export default function ProductDetailPage() {
         ...prev,
         [variationId]: {
           ...variation,
-          [field]: value
+          [field]: field === 'var_goal' ? Math.max(0, parseInt(value as string, 10)) : value
         }
       }
     })
@@ -501,6 +563,29 @@ export default function ProductDetailPage() {
       })
     } finally {
       setDeletingVariationId(null)
+    }
+  }
+
+  const fetchData = async () => {
+    try {
+      const [productRes, variationsRes] = await Promise.all([
+        fetchWithRetry(`http://localhost:5000/api/products/${params.product}`),
+        fetchWithRetry(`http://localhost:5000/api/productvariations?product=${params.product}`)
+      ])
+
+      if (!productRes || !variationsRes) {
+        throw new Error('Failed to fetch updated data')
+      }
+
+      const [productData, variationsData] = await Promise.all([
+        productRes.json(),
+        variationsRes.json()
+      ])
+
+      setProduct(productData)
+      setVariations(variationsData)
+    } catch (error) {
+      console.error('Error fetching updated data:', error)
     }
   }
 
@@ -555,8 +640,8 @@ export default function ProductDetailPage() {
           </div>
           {isEditMode ? (
             <div className="space-x-2">
-              <Button onClick={handleSaveEdit} className="bg-green-500 hover:bg-green-600 text-white">
-                <Check className="mr-2 h-4 w-4" /> Save
+              <Button onClick={handleSaveEdit} className="bg-green-500 hover:bg-green-600 text-white" disabled={isSaving}>
+                <Check className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save'}
               </Button>
               <Button onClick={handleCancelEditMode} variant="outline" className="text-red-500 border-red-500 hover:bg-red-50">
                 <X className="mr-2 h-4 w-4" /> Cancel
@@ -672,8 +757,8 @@ export default function ProductDetailPage() {
                       {isEditMode ? (
                         <Input
                           type="number"
-                          value={variation.var_inv}
-                          onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', parseInt(e.target.value))}
+                          value={variation.var_inv === 0 ? '' : variation.var_inv}
+                          onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
                           className="w-20"
                         />
                       ) : (
@@ -787,7 +872,7 @@ export default function ProductDetailPage() {
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        onClick={() => setIsAddingVariation(false)} 
+                        onClick={() => setIsAddingVariation(false)}
                         className="text-black hover:bg-gray-100"
                         disabled={isSubmittingVariation}
                       >
