@@ -244,98 +244,99 @@ def productvariationsPost():
 
 @app.route('/api/productvariations/<int:resourceid>', methods=['PUT', 'PATCH'])
 def productvariationsEdit(resourceid=None):
-    # Update variation inventory and adjust material inventories only when increasing inventory
     request_data = request.get_json()
     try:
-        # Get current variation data to calculate inventory difference
-        current_query = """
-            SELECT var_inv, var_id
-            FROM frostedfabrics.product_variations 
-            WHERE var_id = %s
-        """
-        current_data = execute_query(current_query, (resourceid,))
-        
-        if not current_data:
-            return make_response(jsonify({"error": "Variation not found"}), 404)
-            
-        current_inv = current_data[0]['var_inv']
-        new_inv = request_data.get('var_inv', current_inv)
-        inv_difference = new_inv - current_inv
-        
-        if inv_difference > 0:
-            # Get all materials required for this variation
-            materials_query = """
-                SELECT vm.mat_id, vm.mat_amount, m.mat_inv
-                FROM frostedfabrics.variation_materials vm
-                JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
-                WHERE vm.var_id = %s
-            """
-            materials = execute_query(materials_query, (resourceid,))
-            
-            # Calculate and validate new material inventories
-            for material in materials:
-                new_mat_inv = material['mat_inv'] - (material['mat_amount'] * inv_difference)
-                if new_mat_inv < 0:
-                    return make_response(jsonify({
-                        "error": "Insufficient material inventory",
-                        "material_id": material['mat_id']
-                    }), 400)
-                
-                # Update material inventory
-                update_material_query = """
-                    UPDATE frostedfabrics.materials 
-                    SET mat_inv = %s 
-                    WHERE mat_id = %s
-                """
-                execute_query(update_material_query, (new_mat_inv, material['mat_id']))
-        elif inv_difference < 0:
-            # When lowering inventory, we don't need to update material inventories
-            pass
-        
-        # Update the variation
-        query = "UPDATE frostedfabrics.product_variations SET "
-        params = []
-        update_fields = ['prod_id', 'var_name', 'var_inv', 'var_goal', 'img_id']
-        
-        for field in update_fields:
-            if request.method == 'PUT' or field in request_data:
-                query += f"{field} = %s, "
-                params.append(request_data.get(field, ''))
-        
-        query = query.rstrip(', ')
-        query += " WHERE var_id = %s"
-        params.append(resourceid)
+        with get_db_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
 
-        execute_query(query, tuple(params))
-        
-        # Return updated variation data
-        get_variation_query = """
-            SELECT pv.*, 
-                   JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                           'mat_id', m.mat_id,
-                           'mat_name', m.mat_name,
-                           'mat_sku', m.mat_sku,
-                           'mat_amount', vm.mat_amount,
-                           'mat_inv', m.mat_inv,
-                           'brand_name', mb.brand_name,
-                           'mc_name', mc.mc_name,
-                           'meas_unit', mm.meas_unit
-                       )
-                   ) as materials
-            FROM frostedfabrics.product_variations pv
-            LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
-            LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
-            LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
-            LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
-            LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
-            WHERE pv.var_id = %s
-            GROUP BY pv.var_id
-        """
-        updated_variation = execute_query(get_variation_query, (resourceid,))
-        
-        return make_response(jsonify(updated_variation[0]), 200)
-        
+            # First, check if the variation exists and get current inventory
+            check_query = """
+                SELECT var_inv
+                FROM frostedfabrics.product_variations
+                WHERE var_id = %s
+            """
+            cursor.execute(check_query, (resourceid,))
+            current_variation = cursor.fetchone()
+
+            if not current_variation:
+                return make_response(jsonify({"error": "Variation not found"}), 404)
+
+            current_inv = current_variation['var_inv']
+            new_inv = request_data.get('var_inv', current_inv)
+            inv_difference = new_inv - current_inv
+
+            # Update the variation
+            update_fields = ['var_name', 'var_inv', 'var_goal', 'img_id']
+            update_data = {k: request_data.get(k) for k in update_fields if k in request_data}
+            
+            if update_data:
+                update_query = "UPDATE frostedfabrics.product_variations SET "
+                update_query += ", ".join(f"{k} = %s" for k in update_data.keys())
+                update_query += " WHERE var_id = %s"
+                cursor.execute(update_query, list(update_data.values()) + [resourceid])
+
+            # Handle material inventory updates if inventory is increased
+            if inv_difference > 0:
+                material_query = """
+                    SELECT vm.mat_id, vm.mat_amount, m.mat_inv
+                    FROM frostedfabrics.variation_materials vm
+                    JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+                    WHERE vm.var_id = %s
+                """
+                cursor.execute(material_query, (resourceid,))
+                materials = cursor.fetchall()
+
+                material_updates = []
+                for material in materials:
+                    new_mat_inv = material['mat_inv'] - (material['mat_amount'] * inv_difference)
+                    if new_mat_inv < 0:
+                        return make_response(jsonify({
+                            "error": "Insufficient material inventory",
+                            "material_id": material['mat_id']
+                        }), 400)
+                    material_updates.append((new_mat_inv, material['mat_id']))
+
+                if material_updates:
+                    cursor.executemany(
+                        "UPDATE frostedfabrics.materials SET mat_inv = %s WHERE mat_id = %s",
+                        material_updates
+                    )
+
+            # Fetch updated variation data
+            fetch_query = """
+                SELECT pv.*, 
+                    JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'mat_id', m.mat_id,
+                            'mat_name', m.mat_name,
+                            'mat_sku', m.mat_sku,
+                            'mat_amount', vm.mat_amount,
+                            'mat_inv', m.mat_inv,
+                            'brand_name', mb.brand_name,
+                            'mc_name', mc.mc_name,
+                            'meas_unit', mm.meas_unit
+                        )
+                    ) as materials
+                FROM frostedfabrics.product_variations pv
+                LEFT JOIN frostedfabrics.variation_materials vm ON pv.var_id = vm.var_id
+                LEFT JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+                LEFT JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                LEFT JOIN frostedfabrics.material_categories mc ON mb.mc_id = mc.mc_id
+                LEFT JOIN frostedfabrics.material_measurements mm ON mc.meas_id = mm.meas_id
+                WHERE pv.var_id = %s
+                GROUP BY pv.var_id
+            """
+            cursor.execute(fetch_query, (resourceid,))
+            updated_data = cursor.fetchone()
+
+            if updated_data:
+                # Process materials
+                materials = json.loads(updated_data['materials'])
+                updated_data['materials'] = [m for m in materials if m and m.get('mat_id') is not None]
+
+            conn.commit()
+            return make_response(jsonify(updated_data), 200)
+
     except Exception as e:
         logger.error(f"Error in productvariationsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
