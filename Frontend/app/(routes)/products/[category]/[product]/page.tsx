@@ -27,6 +27,7 @@ interface Material {
   mc_name: string
   meas_unit: string
   mat_amount: number
+  mat_inv: number
 }
 
 interface ProductVariation {
@@ -107,20 +108,18 @@ export default function ProductDetailPage() {
       setIsLoading(true)
       setError(null)
       try {
-        const [productRes, variationsRes, materialsRes] = await Promise.all([
+        const [productRes, variationsRes] = await Promise.all([
           fetchWithRetry(`http://localhost:5000/api/products/${params.product}`),
-          fetchWithRetry(`http://localhost:5000/api/productvariations?product=${params.product}`),
-          fetchWithRetry(`http://localhost:5000/api/variationmaterials`)
+          fetchWithRetry(`http://localhost:5000/api/productvariations?product=${params.product}`)
         ])
 
-        if (!productRes || !variationsRes || !materialsRes) {
-          throw new Error('Failed to fetch product, variations, or materials data')
+        if (!productRes || !variationsRes) {
+          throw new Error('Failed to fetch product or variations data')
         }
 
-        const [productData, variationsData, materialsData] = await Promise.all([
+        const [productData, variationsData] = await Promise.all([
           productRes.json(),
-          variationsRes.json(),
-          materialsRes.json()
+          variationsRes.json()
         ])
 
         const categoryRes = await fetchWithRetry(`http://localhost:5000/api/productcategories/${productData.pc_id}`)
@@ -129,15 +128,10 @@ export default function ProductDetailPage() {
 
         setProduct(productData)
         setCategory(categoryData)
-
-        const combinedVariations = variationsData.map((variation: ProductVariation) => ({
-          ...variation,
-          materials: materialsData[variation.var_id] || []
-        }))
-        setVariations(combinedVariations)
+        setVariations(variationsData)
 
         console.log('Fetched product:', productData)
-        console.log('Fetched variations:', combinedVariations)
+        console.log('Fetched variations:', variationsData)
         console.log('Fetched category:', categoryData)
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -182,6 +176,51 @@ export default function ProductDetailPage() {
     })
   }
 
+  const calculateRequiredMaterials = (variation: ProductVariation, newInventory: number) => {
+    if (!variation.materials) return true
+    
+    const inventoryDiff = newInventory - variation.var_inv
+    
+    return variation.materials.every(material => {
+      const requiredAmount = material.mat_amount * inventoryDiff
+      return material.mat_inv >= requiredAmount
+    })
+  }
+
+  const updateMaterialInventory = async (variation: ProductVariation, newInventory: number) => {
+    if (!variation.materials) return
+
+    const inventoryDiff = newInventory - variation.var_inv
+    const materialUpdates = variation.materials.map(material => {
+      const requiredAmount = material.mat_amount * inventoryDiff
+      const newMatInventory = material.mat_inv - requiredAmount
+      
+      return fetch(`http://localhost:5000/api/materials/${material.mat_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mat_inv: newMatInventory })
+      })
+    })
+
+    await Promise.all(materialUpdates)
+  }
+
+  const fetchVariationData = async (variationId: number) => {
+    try {
+      const response = await fetchWithRetry(`http://localhost:5000/api/productvariations/${variationId}`)
+      if (!response) throw new Error('Failed to fetch variation data')
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Error fetching variation data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch updated variation data. Please refresh the page.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleUpdateValues = async (variationId: number) => {
     const newInventory = parseFloat(editingValues[variationId].inv)
     const newGoal = parseFloat(editingValues[variationId].goal)
@@ -194,7 +233,29 @@ export default function ProductDetailPage() {
       return
     }
 
+    const variation = variations.find(v => v.var_id === variationId)
+    if (!variation) {
+      toast({
+        title: "Error",
+        description: "Variation not found.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const hasEnoughMaterials = calculateRequiredMaterials(variation, newInventory)
+    if (!hasEnoughMaterials) {
+      toast({
+        title: "Error",
+        description: "Insufficient materials available for this inventory update.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
+      await updateMaterialInventory(variation, newInventory)
+
       const response = await fetch(`http://localhost:5000/api/productvariations/${variationId}`, {
         method: 'PATCH',
         headers: {
@@ -203,12 +264,16 @@ export default function ProductDetailPage() {
         body: JSON.stringify({ var_inv: newInventory, var_goal: newGoal }),
       })
 
-      if (!response.ok) throw new Error('Failed to update values')
+      if (!response.ok) {
+        throw new Error('Failed to update values')
+      }
 
-      const updatedVariation = await response.json()
-      setVariations(prev =>
-        prev.map(v => v.var_id === variationId ? { ...updatedVariation, materials: v.materials } : v)
+      // Fetch all updated variations
+      const updatedVariations = await Promise.all(
+        variations.map(v => fetchVariationData(v.var_id))
       )
+      
+      setVariations(updatedVariations)
 
       handleCancelEdit(variationId)
       toast({
@@ -306,6 +371,17 @@ export default function ProductDetailPage() {
 
     setIsLoading(true)
     try {
+      // First validate all inventory changes
+      const inventoryUpdatesValid = Object.values(editedVariations).every(variation => {
+        const originalVariation = variations.find(v => v.var_id === variation.var_id)
+        if (!originalVariation) return true
+        return calculateRequiredMaterials(variation, variation.var_inv)
+      })
+
+      if (!inventoryUpdatesValid) {
+        throw new Error('Insufficient materials for one or more inventory updates')
+      }
+
       const productUpdate = fetch(`http://localhost:5000/api/products/${editedProduct.prod_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -317,8 +393,14 @@ export default function ProductDetailPage() {
         })
       })
 
-      const variationUpdates = Object.values(editedVariations).map(variation =>
-        fetch(`http://localhost:5000/api/productvariations/${variation.var_id}`, {
+      // Update variations and their materials
+      const variationUpdates = Object.values(editedVariations).map(async variation => {
+        const originalVariation = variations.find(v => v.var_id === variation.var_id)
+        if (originalVariation && variation.var_inv !== originalVariation.var_inv) {
+          await updateMaterialInventory(variation, variation.var_inv)
+        }
+
+        return fetch(`http://localhost:5000/api/productvariations/${variation.var_id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -327,13 +409,21 @@ export default function ProductDetailPage() {
             var_goal: variation.var_goal
           })
         })
-      )
+      })
 
       const results = await Promise.all([productUpdate, ...variationUpdates])
 
       if (results.every(res => res.ok)) {
         setProduct(editedProduct)
-        setVariations(Object.values(editedVariations))
+        
+        // Fetch updated variation data
+        const updatedVariations = await Promise.all(
+          Object.values(editedVariations).map(variation => 
+            fetchVariationData(variation.var_id)
+          )
+        )
+        
+        setVariations(updatedVariations)
         setIsEditMode(false)
         setEditedProduct(null)
         setEditedVariations({})
@@ -348,7 +438,7 @@ export default function ProductDetailPage() {
       console.error('Error saving changes:', error)
       toast({
         title: "Error",
-        description: "Failed to save changes. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save changes. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -361,13 +451,30 @@ export default function ProductDetailPage() {
   }
 
   const handleVariationEdit = (variationId: number, field: keyof ProductVariation, value: string | number) => {
-    setEditedVariations(prev => ({
-      ...prev,
-      [variationId]: {
-        ...prev[variationId],
-        [field]: value
+    setEditedVariations(prev => {
+      const variation = prev[variationId]
+      
+      if (field === 'var_inv' && typeof value === 'number') {
+        const hasEnoughMaterials = calculateRequiredMaterials(variation, value)
+        
+        if (!hasEnoughMaterials) {
+          toast({
+            title: "Error",
+            description: "Insufficient materials available for this inventory update.",
+            variant: "destructive",
+          })
+          return prev // Return previous state without updates
+        }
       }
-    }))
+
+      return {
+        ...prev,
+        [variationId]: {
+          ...variation,
+          [field]: value
+        }
+      }
+    })
   }
 
   const handleDeleteVariation = async (variationId: number) => {
@@ -456,7 +563,7 @@ export default function ProductDetailPage() {
               </Button>
             </div>
           ) : (
-            <Button onClick={handleStartEdit} variant="outline" className="bg-[#3b3b99] text-white hover:bg-[#2f2f7a]">
+            <Button onClick={handleStartEdit} variant="outline" className="text-blue-500 border-blue-500 hover:bg-blue-50">
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </Button>
           )}
@@ -535,25 +642,29 @@ export default function ProductDetailPage() {
             <TableBody>
               {displayVariations.map((variation) => (
                 <Fragment key={variation.var_id}>
-                  <TableRow 
-                    className="border-b border-gray-300 cursor-pointer hover:bg-gray-50"
-                    onClick={() => toggleVariation(variation.var_id)}
-                  >
+                  <TableRow className="border-b border-gray-300">
                     <TableCell className="text-black">
                       <div className="flex items-center">
-                        {expandedVariations.has(variation.var_id) ? (
-                          <ChevronDown className="h-4 w-4 mr-2 text-gray-600" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-0 hover:bg-transparent"
+                          onClick={() => toggleVariation(variation.var_id)}
+                        >
+                          {expandedVariations.has(variation.var_id) ? (
+                            <ChevronDown className="h-4 w-4 text-gray-600" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-600" />
+                          )}
+                        </Button>
                         {isEditMode ? (
                           <Input
                             value={variation.var_name}
                             onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
-                            className="w-full max-w-[200px]"
+                            className="w-full max-w-[200px] ml-2"
                           />
                         ) : (
-                          variation.var_name
+                          <span className="ml-2">{variation.var_name}</span>
                         )}
                       </div>
                     </TableCell>
@@ -586,10 +697,7 @@ export default function ProductDetailPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeletingVariationId(variation.var_id)
-                          }}
+                          onClick={() => setDeletingVariationId(variation.var_id)}
                           className="text-red-500 border-red-500 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -598,10 +706,7 @@ export default function ProductDetailPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeletingVariationId(variation.var_id)
-                          }}
+                          onClick={() => setDeletingVariationId(variation.var_id)}
                           className="text-red-500 border-red-500 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -612,18 +717,26 @@ export default function ProductDetailPage() {
                   {expandedVariations.has(variation.var_id) && (
                     <TableRow>
                       <TableCell colSpan={4} className="bg-gray-50 p-4">
-                        <h4 className="font-medium text-sm mb-2">Materials Required:</h4>
+                        <h4 className="font-medium text-sm mb-2 text-black">Materials Required:</h4>
                         {variation.materials && variation.materials.length > 0 ? (
                           <div className="space-y-2">
                             {variation.materials.map((material) => (
-                              <div key={material.mat_id} className="flex items-center justify-between text-sm">
+                              <div key={material.mat_id} className="flex items-center justify-between text-sm text-black">
                                 <span>{material.mat_name}</span>
-                                <span>{material.mat_amount} {material.meas_unit}</span>
+                                <div className="text-right">
+                                  <div>{material.mat_amount} {material.meas_unit} per item</div>
+                                  <div>
+                                    {typeof material.mat_inv === 'number' 
+                                      ? `${material.mat_inv.toFixed(2)} ${material.meas_unit} available`
+                                      : 'Inventory not available'
+                                    }
+                                  </div>
+                                </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500">No materials assigned to this variation.</p>
+                          <p className="text-sm text-black">No materials assigned to this variation.</p>
                         )}
                       </TableCell>
                     </TableRow>
