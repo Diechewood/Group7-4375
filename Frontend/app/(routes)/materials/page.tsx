@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, X } from 'lucide-react'
-import Link from 'next/link'
+import { Search, Plus, ArrowLeft } from 'lucide-react'
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -20,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import CategoryPage from './[category]/page'
 
 interface Category {
   mc_id: number
@@ -37,7 +37,12 @@ const measurementUnits = [
   { meas_id: 7, label: 'Pounds', value: '7' },
 ]
 
-export default function CategoriesPage() {
+interface CategoriesPageProps {
+  isPopup?: boolean
+  onSelectMaterial?: (materialId: number) => void
+}
+
+export default function CategoriesPage({ isPopup = false, onSelectMaterial }: CategoriesPageProps) {
   const [categories, setCategories] = useState<Category[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +50,7 @@ export default function CategoriesPage() {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>("")
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const { toast } = useToast()
 
   const fetchCategories = async (retries = 3) => {
@@ -137,85 +143,116 @@ export default function CategoriesPage() {
     setSelectedMeasurement("")
   }
 
+  const handleCategoryClick = (categoryName: string) => {
+    setSelectedCategory(categoryName)
+  }
+
+  const handleBackToCategories = () => {
+    setSelectedCategory(null)
+  }
+
   return (
     <div className="h-full p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-[#3D3B54]">Material Categories</h1>
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500" />
-            <Input
-              type="text"
-              placeholder="Search categories..."
-              className="pl-8 w-64"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Button variant="outline">Show all</Button>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="text-red-500 mb-4">{error}</div>
-      ) : isLoading ? (
-        <div className="text-center py-8">Loading categories...</div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredCategories.map((category) => (
-            <Link href={`/materials/${encodeURIComponent(category.mc_name)}`} key={category.mc_id}>
-              <Card className="hover:bg-gray-50 transition-colors cursor-pointer h-24 flex items-center justify-center">
-                <CardHeader className="p-3">
-                  <CardTitle className="text-sm text-center">{category.mc_name}</CardTitle>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
+      {selectedCategory ? (
+        <div>
           <Button 
-            onClick={() => setIsAddingCategory(true)}
-            variant="outline" 
-            className="h-24 flex items-center justify-center border-dashed border-2 bg-[#464B95] hover:bg-[#363875] text-white"
+            variant="ghost" 
+            onClick={handleBackToCategories}
+            className="mb-4 text-purple-700 hover:bg-purple-50"
           >
-            <Plus className="mr-2 h-4 w-4" /> <span className="text-xs">Add New</span>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Categories
           </Button>
+          <CategoryPage 
+            category={selectedCategory} 
+            isPopup={isPopup} 
+            onSelectMaterial={onSelectMaterial}
+          />
         </div>
-      )}
-
-      <Dialog open={isAddingCategory} onOpenChange={handleCloseDialog}>
-        <DialogContent className="sm:max-w-[425px] text-white">
-          <DialogHeader>
-            <DialogTitle>Add New Category</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Input
-                type="text"
-                placeholder="Category name"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                className="text-white placeholder-gray-400 bg-transparent border-gray-600"
-              />
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-[#3D3B54]">Material Categories</h1>
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500" />
+                <Input
+                  type="text"
+                  placeholder="Search categories..."
+                  className="pl-8 w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline">Show all</Button>
             </div>
-            <div className="space-y-2">
-              <Select value={selectedMeasurement} onValueChange={setSelectedMeasurement}>
-                <SelectTrigger className="text-white bg-transparent border-gray-600">
-                  <SelectValue placeholder="Select measurement unit" />
-                </SelectTrigger>
-                <SelectContent>
-                  {measurementUnits.map((unit) => (
-                    <SelectItem key={unit.meas_id} value={unit.value} className="text-gray-800">
-                      {unit.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleAddCategory} className="bg-[#464B95] hover:bg-[#363875] text-white w-full">
-              Add Category
-            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+
+          {error ? (
+            <div className="text-red-500 mb-4">{error}</div>
+          ) : isLoading ? (
+            <div className="text-center py-8">Loading categories...</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {filteredCategories.map((category) => (
+                <Card 
+                  key={category.mc_id}
+                  className="hover:bg-gray-50 transition-colors cursor-pointer h-24 flex items-center justify-center"
+                  onClick={() => handleCategoryClick(category.mc_name)}
+                >
+                  <CardHeader className="p-3">
+                    <CardTitle className="text-sm text-center">{category.mc_name}</CardTitle>
+                  </CardHeader>
+                </Card>
+              ))}
+              {!isPopup && (
+                <Button 
+                  onClick={() => setIsAddingCategory(true)}
+                  variant="outline" 
+                  className="h-24 flex items-center justify-center border-dashed border-2 bg-[#464B95] hover:bg-[#363875] text-white"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> <span className="text-xs">Add New</span>
+                </Button>
+              )}
+            </div>
+          )}
+
+          <Dialog open={isAddingCategory} onOpenChange={handleCloseDialog}>
+            <DialogContent className="sm:max-w-[425px] text-white">
+              <DialogHeader>
+                <DialogTitle>Add New Category</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Category name"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="text-white placeholder-gray-400 bg-transparent border-gray-600"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Select value={selectedMeasurement} onValueChange={setSelectedMeasurement}>
+                    <SelectTrigger className="text-white bg-transparent border-gray-600">
+                      <SelectValue placeholder="Select measurement unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {measurementUnits.map((unit) => (
+                        <SelectItem key={unit.meas_id} value={unit.value} className="text-gray-800">
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleAddCategory} className="bg-[#464B95] hover:bg-[#363875] text-white w-full">
+                  Add Category
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   )
 }
