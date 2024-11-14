@@ -1,14 +1,13 @@
-__authors__ = "John Tran, Kevin Tojin, Elian Gutierrez"
-
+import mysql.connector
+from mysql.connector import pooling
+from contextlib import contextmanager
 import logging
 import flask
 from flask import jsonify, request, make_response
-import sql
 import creds
 import traceback
 from urllib.parse import unquote
 import time
-import mysql.connector
 import json
 
 # Set up logging
@@ -19,21 +18,43 @@ logger = logging.getLogger(__name__)
 app = flask.Flask(__name__)  # sets up the application
 app.config["DEBUG"] = True  # allow to show errors in browser
 
-# Function to create a database connection with retry mechanism
+# Create a connection pool with increased pool size and max connections
+connection_pool = mysql.connector.pooling.MySQLConnectionPool(
+    pool_name="mypool",
+    pool_size=20,  # Increase from 5 to 20
+    pool_reset_session=True,
+    host=creds.Creds.conString,
+    user=creds.Creds.userName,
+    password=creds.Creds.password,
+    database=creds.Creds.dbName
+)
+
+@contextmanager
 def get_db_connection():
+    connection = connection_pool.get_connection()
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+def execute_query(query, params=None):
     max_retries = 3
-    retry_delay = 1  # seconds
+    retry_delay = 1  # second
 
     for attempt in range(max_retries):
         try:
-            conn = sql.create_connection(creds.Creds.conString, creds.Creds.userName, creds.Creds.password, creds.Creds.dbName)
-            return conn
+            with get_db_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, params)
+                result = cursor.fetchall()
+                conn.commit()
+                return result
         except mysql.connector.Error as err:
-            logger.error(f"Database connection attempt {attempt + 1} failed: {err}")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-            else:
+            logger.error(f"Database error on attempt {attempt + 1}: {err}")
+            if attempt == max_retries - 1:
                 raise
+            time.sleep(retry_delay)
+
 
 # Enable CORS for all routes
 @app.after_request
@@ -44,7 +65,6 @@ def add_cors_headers(response):
     return response
 
 # ============== EXAMPLE METHODS ============
-# Set up back end routes
 @app.route('/api/test', methods=['GET'])
 def test():
     return make_response(jsonify("SUCCESS"), 200)
@@ -53,11 +73,7 @@ def test():
 @app.route('/api/products', methods=['GET'])
 @app.route('/api/products/<int:resourceid>', methods=['GET'])
 def productsGet(resourceid=None):
-    query_results = None
-    conn = None
     try:
-        conn = get_db_connection()
-        
         if resourceid is not None:
             query = "SELECT * FROM frostedfabrics.products WHERE prod_id = %s"
             params = (resourceid,)
@@ -74,11 +90,7 @@ def productsGet(resourceid=None):
                 params = (category,)
 
         logger.info(f"Executing query: {query} with params: {params}")
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         logger.info(f"Query results count: {len(query_results)}")
         
@@ -90,16 +102,11 @@ def productsGet(resourceid=None):
         logger.error(f"Error in productsGet: {str(e)}")
         logger.error(traceback.format_exc())
         return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/products', methods=['POST'])
 def productsPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.products (pc_id, prod_name, prod_cost, prod_msrp, prod_time, img_id)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -112,21 +119,16 @@ def productsPost():
             request_data['prod_time'],
             request_data['img_id']
         )
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productsPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/products/<int:resourceid>', methods=['PUT', 'PATCH'])
 def productsEdit(resourceid=None):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = "UPDATE frostedfabrics.products SET "
         params = []
         update_fields = ['pc_id', 'prod_name', 'prod_cost', 'prod_msrp', 'prod_time', 'img_id']
@@ -140,38 +142,27 @@ def productsEdit(resourceid=None):
         query += " WHERE prod_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/products/<int:resourceid>', methods=['DELETE'])
 def productsDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.products WHERE prod_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== PRODUCT VARIATIONS METHODS ============
 @app.route('/api/productvariations', methods=['GET'])
 @app.route('/api/productvariations/<int:resourceid>', methods=['GET'])
 def productvariationsGet(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
-        
         base_query = """
             SELECT 
                 pv.*,
@@ -207,10 +198,7 @@ def productvariationsGet(resourceid=None):
                 query = base_query + " GROUP BY pv.var_id"
                 params = None
 
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         # Process the materials JSON string
         for result in query_results:
@@ -231,16 +219,11 @@ def productvariationsGet(resourceid=None):
     except Exception as e:
         logger.error(f"Error in productvariationsGet: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/productvariations', methods=['POST'])
 def productvariationsPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.product_variations (prod_id, var_name, var_inv, var_goal, img_id)
         VALUES (%s, %s, %s, %s, %s)
@@ -252,29 +235,25 @@ def productvariationsPost():
             request_data['var_goal'],
             request_data['img_id']
         )
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productvariationsPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/productvariations/<int:resourceid>', methods=['PUT', 'PATCH'])
 def productvariationsEdit(resourceid=None):
+    # Update variation inventory and adjust material inventories only when increasing inventory
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
-        
         # Get current variation data to calculate inventory difference
         current_query = """
             SELECT var_inv, var_id
             FROM frostedfabrics.product_variations 
             WHERE var_id = %s
         """
-        current_data = sql.execute_read_query(conn, current_query, (resourceid,))
+        current_data = execute_query(current_query, (resourceid,))
         
         if not current_data:
             return make_response(jsonify({"error": "Variation not found"}), 404)
@@ -283,7 +262,7 @@ def productvariationsEdit(resourceid=None):
         new_inv = request_data.get('var_inv', current_inv)
         inv_difference = new_inv - current_inv
         
-        if inv_difference != 0:
+        if inv_difference > 0:
             # Get all materials required for this variation
             materials_query = """
                 SELECT vm.mat_id, vm.mat_amount, m.mat_inv
@@ -291,7 +270,7 @@ def productvariationsEdit(resourceid=None):
                 JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
                 WHERE vm.var_id = %s
             """
-            materials = sql.execute_read_query(conn, materials_query, (resourceid,))
+            materials = execute_query(materials_query, (resourceid,))
             
             # Calculate and validate new material inventories
             for material in materials:
@@ -308,7 +287,10 @@ def productvariationsEdit(resourceid=None):
                     SET mat_inv = %s 
                     WHERE mat_id = %s
                 """
-                sql.execute_query(conn, update_material_query, (new_mat_inv, material['mat_id']))
+                execute_query(update_material_query, (new_mat_inv, material['mat_id']))
+        elif inv_difference < 0:
+            # When lowering inventory, we don't need to update material inventories
+            pass
         
         # Update the variation
         query = "UPDATE frostedfabrics.product_variations SET "
@@ -324,7 +306,7 @@ def productvariationsEdit(resourceid=None):
         query += " WHERE var_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         
         # Return updated variation data
         get_variation_query = """
@@ -350,40 +332,30 @@ def productvariationsEdit(resourceid=None):
             WHERE pv.var_id = %s
             GROUP BY pv.var_id
         """
-        updated_variation = sql.execute_read_query(conn, get_variation_query, (resourceid,))
+        updated_variation = execute_query(get_variation_query, (resourceid,))
         
         return make_response(jsonify(updated_variation[0]), 200)
         
     except Exception as e:
         logger.error(f"Error in productvariationsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
+
 
 @app.route('/api/productvariations/<int:resourceid>', methods=['DELETE'])
 def productvariationsDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.product_variations WHERE var_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productvariationsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== PRODUCT CATEGORIES METHODS ============
 @app.route('/api/productcategories', methods=['GET'])
 @app.route('/api/productcategories/<int:resourceid>', methods=['GET'])
 def productcategoriesGet(resourceid=None):
-    query_results = None
-    conn = None
     try:
-        conn = get_db_connection()
         if resourceid is not None:
             query = "SELECT * FROM frostedfabrics.product_categories WHERE pc_id = %s"
             params = (resourceid,)
@@ -391,11 +363,7 @@ def productcategoriesGet(resourceid=None):
             query = "SELECT * FROM frostedfabrics.product_categories"
             params = None
 
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         if resourceid is not None:
             return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
@@ -404,36 +372,26 @@ def productcategoriesGet(resourceid=None):
     except Exception as e:
         logger.error(f"Error in productcategoriesGet: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/productcategories', methods=['POST'])
 def productcategoriesPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.product_categories (pc_name, img_id)
         VALUES (%s, %s)
         """
         params = (request_data['pc_name'], request_data['img_id'])
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productcategoriesPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/productcategories/<int:resourceid>', methods=['PUT', 'PATCH'])
 def productcategoriesEdit(resourceid=None):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = "UPDATE frostedfabrics.product_categories SET "
         params = []
         update_fields = ['pc_name', 'img_id']
@@ -447,38 +405,27 @@ def productcategoriesEdit(resourceid=None):
         query += " WHERE pc_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productcategoriesEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/productcategories/<int:resourceid>', methods=['DELETE'])
 def productcategoriesDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.product_categories WHERE pc_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in productcategoriesDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== MATERIAL CATEGORIES METHODS ============
 @app.route('/api/materialcategories', methods=['GET'])
 @app.route('/api/materialcategories/<int:resourceid>', methods=['GET'])
 def materialcategoriesGet(resourceid=None):
-    query_results = None
-    conn = None
     try:
-        conn = get_db_connection()
         if resourceid is not None:
             query = "SELECT * FROM frostedfabrics.material_categories WHERE mc_id = %s"
             params = (resourceid,)
@@ -486,11 +433,7 @@ def materialcategoriesGet(resourceid=None):
             query = "SELECT * FROM frostedfabrics.material_categories"
             params = None
 
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         if resourceid is not None:
             return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
@@ -499,36 +442,26 @@ def materialcategoriesGet(resourceid=None):
     except Exception as e:
         logger.error(f"Error in materialcategoriesGet: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialcategories', methods=['POST'])
 def materialcategoriesPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.material_categories (meas_id, mc_name, img_id)
         VALUES (%s, %s, %s)
         """
         params = (request_data['meas_id'], request_data['mc_name'], request_data['img_id'])
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialcategoriesPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialcategories/<int:resourceid>', methods=['PUT', 'PATCH'])
 def materialcategoriesEdit(resourceid=None):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = "UPDATE frostedfabrics.material_categories SET "
         params = []
         update_fields = ['meas_id', 'mc_name', 'img_id']
@@ -542,38 +475,27 @@ def materialcategoriesEdit(resourceid=None):
         query += " WHERE mc_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialcategoriesEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialcategories/<int:resourceid>', methods=['DELETE'])
 def materialcategoriesDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.material_categories WHERE mc_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialcategoriesDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== MATERIAL BRANDS METHODS ============
 @app.route('/api/materialbrands', methods=['GET'])
 @app.route('/api/materialbrands/<int:resourceid>', methods=['GET'])
 def materialbrandsGet(resourceid=None):
-    query_results = None
-    conn = None
     try:
-        conn = get_db_connection()
         if resourceid is not None:
             query = "SELECT * FROM frostedfabrics.material_brands WHERE brand_id = %s"
             params = (resourceid,)
@@ -581,11 +503,7 @@ def materialbrandsGet(resourceid=None):
             query = "SELECT * FROM frostedfabrics.material_brands"
             params = None
 
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         if resourceid is not None:
             return make_response(jsonify(query_results[0] if query_results else {"error": "Resource not found"}), 200 if query_results else 404)
@@ -594,36 +512,26 @@ def materialbrandsGet(resourceid=None):
     except Exception as e:
         logger.error(f"Error in materialbrandsGet: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialbrands', methods=['POST'])
 def materialbrandsPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.material_brands (mc_id, brand_name, brand_price, img_id)
         VALUES (%s, %s, %s, %s)
         """
         params = (request_data['mc_id'], request_data['brand_name'], request_data['brand_price'], request_data['img_id'])
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialbrandsPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialbrands/<int:resourceid>', methods=['PUT', 'PATCH'])
 def materialbrandsEdit(resourceid=None):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = "UPDATE frostedfabrics.material_brands SET "
         params = []
         update_fields = ['mc_id', 'brand_name', 'brand_price', 'img_id']
@@ -637,39 +545,27 @@ def materialbrandsEdit(resourceid=None):
         query += " WHERE brand_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialbrandsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materialbrands/<int:resourceid>', methods=['DELETE'])
 def materialbrandsDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.material_brands WHERE brand_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialbrandsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== MATERIALS METHODS ============
 @app.route('/api/materials', methods=['GET'])
 @app.route('/api/materials/<int:resourceid>', methods=['GET'])
 def materialsGet(resourceid=None):
-    query_results = None
-    conn = None
     try:
-        conn = get_db_connection()
-        
         if resourceid is not None:
             query = """
                 SELECT m.*, mb.mc_id, mc.mc_name, mc.meas_id, mm.meas_unit
@@ -695,11 +591,7 @@ def materialsGet(resourceid=None):
                 params = (category,)
 
         logger.info(f"Executing query: {query} with params: {params}")
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         logger.info(f"Query results count: {len(query_results)}")
         
@@ -711,16 +603,11 @@ def materialsGet(resourceid=None):
         logger.error(f"Error in materialsGet: {str(e)}")
         logger.error(traceback.format_exc())
         return make_response(jsonify({"error": "Internal server error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materials', methods=['POST'])
 def materialsPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = """
         INSERT INTO frostedfabrics.materials (brand_id, mat_name, mat_sku, mat_inv, mat_alert, img_id)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -733,21 +620,16 @@ def materialsPost():
             request_data['mat_alert'],
             request_data['img_id']
         )
-        sql.execute_query(conn, query, params)
+        execute_query(query, params)
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialsPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materials/<int:resourceid>', methods=['PUT', 'PATCH'])
 def materialsEdit(resourceid=None):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
         query = "UPDATE frostedfabrics.materials SET "
         params = []
         update_fields = ['brand_id', 'mat_name', 'mat_sku', 'mat_inv', 'mat_alert', 'img_id']
@@ -761,38 +643,27 @@ def materialsEdit(resourceid=None):
         query += " WHERE mat_id = %s"
         params.append(resourceid)
 
-        sql.execute_query(conn, query, tuple(params))
+        execute_query(query, tuple(params))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/materials/<int:resourceid>', methods=['DELETE'])
 def materialsDelete(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
         query = "DELETE FROM frostedfabrics.materials WHERE mat_id = %s"
-        sql.execute_query(conn, query, (resourceid,))
+        execute_query(query, (resourceid,))
         return make_response("", 200)
     except Exception as e:
         logger.error(f"Error in materialsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 # ============== VARIATION MATERIALS METHODS ============
 @app.route('/api/variationmaterials', methods=['GET'])
 @app.route('/api/variationmaterials/<int:resourceid>', methods=['GET'])
 def variationmaterialsGet(resourceid=None):
-    conn = None
     try:
-        conn = get_db_connection()
-        
         if resourceid is not None:
             query = """
                 SELECT 
@@ -834,11 +705,7 @@ def variationmaterialsGet(resourceid=None):
             params = None
 
         logger.info(f"Executing query: {query}")
-        query_results = sql.execute_read_query(conn, query, params)
-        
-        if query_results is None:
-            logger.error("Query returned None")
-            return make_response(jsonify({"error": "Database query failed"}), 500)
+        query_results = execute_query(query, params)
         
         if resourceid is not None:
             if not query_results:
@@ -857,24 +724,18 @@ def variationmaterialsGet(resourceid=None):
     except Exception as e:
         logger.error(f"Error in variationmaterialsGet: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/variationmaterials', methods=['POST'])
 def variationmaterialsPost():
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
-        
         # Validate that the variation and material exist
         validation_query = """
             SELECT 
                 (SELECT COUNT(*) FROM frostedfabrics.product_variations WHERE var_id = %s) as var_exists,
                 (SELECT COUNT(*) FROM frostedfabrics.materials WHERE mat_id = %s) as mat_exists
         """
-        validation = sql.execute_read_query(conn, validation_query, 
+        validation = execute_query(validation_query, 
             (request_data['var_id'], request_data['mat_id']))
         
         if not validation[0]['var_exists'] or not validation[0]['mat_exists']:
@@ -886,7 +747,7 @@ def variationmaterialsPost():
             VALUES (%s, %s, %s)
             ON DUPLICATE KEY UPDATE mat_amount = VALUES(mat_amount)
         """
-        sql.execute_query(conn, upsert_query, (
+        execute_query(upsert_query, (
             request_data['var_id'],
             request_data['mat_id'],
             request_data['mat_amount']
@@ -911,30 +772,24 @@ def variationmaterialsPost():
             WHERE vm.var_id = %s
             ORDER BY m.mat_name
         """
-        updated_data = sql.execute_read_query(conn, query, (request_data['var_id'],))
+        updated_data = execute_query(query, (request_data['var_id'],))
         return make_response(jsonify(updated_data), 201)
         
     except Exception as e:
         logger.error(f"Error in variationmaterialsPost: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/variationmaterials/<int:var_id>/<int:mat_id>', methods=['PUT', 'PATCH'])
 def variationmaterialsEdit(var_id, mat_id):
     request_data = request.get_json()
-    conn = None
     try:
-        conn = get_db_connection()
-        
         # Update the material amount
         update_query = """
             UPDATE frostedfabrics.variation_materials 
             SET mat_amount = %s 
             WHERE var_id = %s AND mat_id = %s
         """
-        result = sql.execute_query(conn, update_query, (
+        result = execute_query(update_query, (
             request_data['mat_amount'],
             var_id,
             mat_id
@@ -962,28 +817,22 @@ def variationmaterialsEdit(var_id, mat_id):
             WHERE vm.var_id = %s
             ORDER BY m.mat_name
         """
-        updated_data = sql.execute_read_query(conn, query, (var_id,))
+        updated_data = execute_query(query, (var_id,))
         return make_response(jsonify(updated_data), 200)
         
     except Exception as e:
         logger.error(f"Error in variationmaterialsEdit: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 @app.route('/api/variationmaterials/<int:var_id>/<int:mat_id>', methods=['DELETE'])
 def variationmaterialsDelete(var_id, mat_id):
-    conn = None
     try:
-        conn = get_db_connection()
-        
         # Delete the material from the variation
         delete_query = """
             DELETE FROM frostedfabrics.variation_materials 
             WHERE var_id = %s AND mat_id = %s
         """
-        result = sql.execute_query(conn, delete_query, (var_id, mat_id))
+        result = execute_query(delete_query, (var_id, mat_id))
         
         if result.rowcount == 0:
             return make_response(jsonify({"error": "Material not found for this variation"}), 404)
@@ -1007,15 +856,12 @@ def variationmaterialsDelete(var_id, mat_id):
             WHERE vm.var_id = %s
             ORDER BY m.mat_name
         """
-        updated_data = sql.execute_read_query(conn, query, (var_id,))
+        updated_data = execute_query(query, (var_id,))
         return make_response(jsonify(updated_data), 200)
         
     except Exception as e:
         logger.error(f"Error in variationmaterialsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
-    finally:
-        if conn:
-            conn.close()
 
 if __name__ == '__main__':
     app.run(threaded=True)
