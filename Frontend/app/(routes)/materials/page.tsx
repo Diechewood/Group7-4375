@@ -25,6 +25,7 @@ interface Category {
   mc_id: number
   mc_name: string
   img_id: string | null
+  meas_id: number
 }
 
 const measurementUnits = [
@@ -50,7 +51,7 @@ export default function CategoriesPage({ isPopup = false, onSelectMaterial }: Ca
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [selectedMeasurement, setSelectedMeasurement] = useState<string>("")
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const { toast } = useToast()
 
   const fetchCategories = async (retries = 3) => {
@@ -143,8 +144,8 @@ export default function CategoriesPage({ isPopup = false, onSelectMaterial }: Ca
     setSelectedMeasurement("")
   }
 
-  const handleCategoryClick = (categoryName: string) => {
-    setSelectedCategory(categoryName)
+  const handleCategoryClick = (category: Category) => {
+    setSelectedCategory(category)
   }
 
   const handleBackToCategories = () => {
@@ -163,7 +164,9 @@ export default function CategoriesPage({ isPopup = false, onSelectMaterial }: Ca
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Categories
           </Button>
           <CategoryPage 
-            category={selectedCategory} 
+            category={selectedCategory.mc_name}
+            categoryId={selectedCategory.mc_id}
+            measurementId={selectedCategory.meas_id}
             isPopup={isPopup} 
             onSelectMaterial={onSelectMaterial}
           />
@@ -197,7 +200,7 @@ export default function CategoriesPage({ isPopup = false, onSelectMaterial }: Ca
                 <Card 
                   key={category.mc_id}
                   className="hover:bg-gray-50 transition-colors cursor-pointer h-24 flex items-center justify-center"
-                  onClick={() => handleCategoryClick(category.mc_name)}
+                  onClick={() => handleCategoryClick(category)}
                 >
                   <CardHeader className="p-3">
                     <CardTitle className="text-sm text-center">{category.mc_name}</CardTitle>

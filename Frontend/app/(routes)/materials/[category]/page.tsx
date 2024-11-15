@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check, Pencil, Trash2, Plus } from 'lucide-react'
@@ -66,7 +65,9 @@ interface GroupedMaterials {
 }
 
 interface CategoryPageProps {
-  category?: string
+  category: string
+  categoryId: number
+  measurementId: number
   isPopup?: boolean
   onSelectMaterial?: (materialId: number) => void
 }
@@ -85,9 +86,7 @@ interface NewMaterialFormData {
   brand_id: number
 }
 
-export default function CategoryPage({ category: propCategory, isPopup = false, onSelectMaterial }: CategoryPageProps) {
-  const params = useParams()
-  const router = useRouter()
+export default function CategoryPage({ category, categoryId, measurementId, isPopup = false, onSelectMaterial }: CategoryPageProps) {
   const { toast } = useToast()
   const [materials, setMaterials] = useState<Material[]>([])
   const [brands, setBrands] = useState<MaterialBrand[]>([])
@@ -108,7 +107,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
   const [newBrandData, setNewBrandData] = useState<NewBrandFormData>({
     brand_name: '',
     brand_price: '',
-    mc_id: 0
+    mc_id: categoryId
   })
   const [newMaterialData, setNewMaterialData] = useState<NewMaterialFormData>({
     mat_name: '',
@@ -119,15 +118,14 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const decodedCategory = propCategory || decodeURIComponent(params.category as string)
-
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true)
     setError(null)
     try {
+      // Fetch materials and brands for this specific category
       const [materialsRes, brandsRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/materials?category=${encodeURIComponent(decodedCategory)}`, { signal }),
-        fetch('http://localhost:5000/api/materialbrands', { signal })
+        fetch(`http://localhost:5000/api/materials?category=${encodeURIComponent(category)}`, { signal }),
+        fetch(`http://localhost:5000/api/materialbrands?mc_id=${categoryId}`, { signal })
       ])
       
       if (!materialsRes.ok || !brandsRes.ok) {
@@ -140,7 +138,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
       ])
 
       setMaterials(materialsData)
-      setBrands(brandsData)
+      setBrands(brandsData.filter((brand: MaterialBrand) => brand.mc_id === categoryId))
       setRetryCount(0)
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -157,7 +155,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
     } finally {
       setIsLoading(false)
     }
-  }, [decodedCategory, retryCount])
+  }, [category, categoryId, retryCount])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -173,29 +171,18 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
     }
   }, [fetchData, retryCount])
 
-  useEffect(() => {
-    const abortController = new AbortController()
-    const signal = abortController.signal
+  const filteredBrands = brands.filter(brand => 
+    searchTerm === '' || 
+    brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    materials.some(m => 
+      m.brand_id === brand.brand_id && (
+        m.mat_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.mat_sku.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    )
+  )
 
-    fetchData(signal)
-
-    const retryTimer = retryCount > 0 && retryCount < 3 ? setTimeout(() => fetchData(signal), 1000) : null
-
-    return () => {
-      abortController.abort()
-      if (retryTimer) clearTimeout(retryTimer)
-    }
-  }, [fetchData, retryCount])
-
-  const filteredMaterials = materials.filter(material => {
-    const brand = brands.find(b => b.brand_id === material.brand_id)
-    return searchTerm === '' || 
-      brand?.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.mat_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.mat_sku.toLowerCase().includes(searchTerm.toLowerCase())
-  })
-
-  const groupedMaterials = filteredMaterials.reduce((acc: GroupedMaterials, material) => {
+  const groupedMaterials = materials.reduce((acc: GroupedMaterials, material) => {
     if (!acc[material.brand_id]) {
       acc[material.brand_id] = []
     }
@@ -203,13 +190,13 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
     return acc
   }, {})
 
-  const sortedBrandIds = Object.keys(groupedMaterials)
-    .map(Number)
+  const sortedBrandIds = filteredBrands
     .sort((a, b) => {
-      const brandA = brands.find(brand => brand.brand_id === a)?.brand_name || ''
-      const brandB = brands.find(brand => brand.brand_id === b)?.brand_name || ''
-      return sortDirection === 'asc' ? brandA.localeCompare(brandB) : brandB.localeCompare(brandA)
+      return sortDirection === 'asc' 
+        ? a.brand_name.localeCompare(b.brand_name) 
+        : b.brand_name.localeCompare(a.brand_name)
     })
+    .map(brand => brand.brand_id)
 
   const toggleBrand = (brandId: number) => {
     setExpandedBrands(prev => {
@@ -442,32 +429,18 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
 
     setIsSubmitting(true)
     try {
-      // Fetch the category information to get the mc_id
-      const categoryResponse = await fetch(`http://localhost:5000/api/materialcategories?mc_name=${encodeURIComponent(decodedCategory)}`)
-      
-      if (!categoryResponse.ok) {
-        throw new Error(`Failed to fetch category information: ${categoryResponse.statusText}`)
-      }
-
-      const categoryData = await categoryResponse.json()
-      if (!categoryData || categoryData.length === 0) {
-        throw new Error(`Category "${decodedCategory}" not found`)
-      }
-
-      const categoryId = categoryData[0].mc_id
-
       const response = await fetch('http://localhost:5000/api/materialbrands', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          brand_name: newBrandData.brand_name,
-          brand_price: parseFloat(newBrandData.brand_price),
-          mc_id: categoryId,
-          img_id: null
-        }),
-      })
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            brand_name: newBrandData.brand_name,
+            brand_price: parseFloat(newBrandData.brand_price),
+            mc_id: categoryId,
+            img_id: null
+          }),
+        })
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -483,7 +456,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
       setNewBrandData({
         brand_name: '',
         brand_price: '',
-        mc_id: 0
+        mc_id: categoryId
       })
       await fetchData()
     } catch (error) {
@@ -560,7 +533,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
   return (
     <div className="h-full flex flex-col">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 mt-2">{decodedCategory}</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mt-2">{category}</h1>
         <div className="flex justify-between items-center space-x-2 mt-4">
           <div className="flex items-center space-x-2">
             <div className="relative">
@@ -638,17 +611,11 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      ) : materials.length === 0 ? (
+      ) : filteredBrands.length === 0 ? (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>No Materials Found</AlertTitle>
-          <AlertDescription>There are no materials available for this category.</AlertDescription>
-        </Alert>
-      ) : filteredMaterials.length === 0 ? (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>No Results</AlertTitle>
-          <AlertDescription>No materials match your search criteria. Try adjusting your search term.</AlertDescription>
+          <AlertTitle>No Brands Found</AlertTitle>
+          <AlertDescription>There are no brands available for this category.</AlertDescription>
         </Alert>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
@@ -677,7 +644,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
             <tbody>
               {sortedBrandIds.map((brandId) => {
                 const brand = brands.find(b => b.brand_id === brandId)
-                const materialsForBrand = groupedMaterials[brandId]
+                const materialsForBrand = groupedMaterials[brandId] || []
                 const isExpanded = expandedBrands.has(brandId)
                 const editedBrand = editedBrands[brandId] || brand
 
@@ -759,105 +726,114 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
                             </td>
                           </tr>
                         )}
-                        {materialsForBrand.map((material) => {
-                          const editedMaterial = editedMaterials[material.mat_id] || material
-                          return (
-                            <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
-                              <td className="p-2 pl-8 text-gray-800">
-                                {isEditMode ? (
-                                  <Input
-                                    value={editedMaterial.mat_name}
-                                    onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_name', e.target.value)}
-                                    className="w-full max-w-[200px] text-gray-800"
-                                  />
-                                ) : (
-                                  material.mat_name
-                                )}
-                              </td>
-                              <td className="p-2 text-gray-800">
-                                {isEditMode ? (
-                                  <Input
-                                    value={editedMaterial.mat_sku}
-                                    onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_sku', e.target.value)}
-                                    className="w-full max-w-[100px] text-gray-800"
-                                  />
-                                ) : (
-                                  material.mat_sku
-                                )}
-                              </td>
-                              <td className="p-2 text-gray-800">
-                                {isEditMode ? (
-                                  <Input
-                                    type="number"
-                                    value={editedMaterials[material.mat_id]?.mat_inv || material.mat_inv}
-                                    onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_inv', parseFloat(e.target.value))}
-                                    className="w-full max-w-[100px] text-gray-800"
-                                  />
-                                ) : (
-                                  material.mat_inv
-                                )}
-                              </td>
-                              {!isEditMode && !isPopup && (
-                                <td className="p-2 text-gray-800">
-                                  {editingInventory[material.mat_id] !== undefined ? (
-                                    <div className="flex items-center">
-                                      <Input
-                                        type="number"
-                                        value={editingInventory[material.mat_id]}
-                                        onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
-                                        className="w-20 mr-2 text-gray-800"
-                                      />
-                                      <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
-                                        <Check className="h-4 w-4 text-green-600" />
-                                      </Button>
-                                      <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(material.mat_id)}>
-                                        <X className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </div>
+                        {materialsForBrand.length === 0 ? (
+                          <tr className="border-b border-gray-300 bg-white">
+                            <td colSpan={7} className="p-2 pl-8 text-gray-600 italic">
+                              No materials found for this brand.
+                            </td>
+                          </tr>
+                        ) : (
+                          materialsForBrand.map((material) => {
+                            const editedMaterial = editedMaterials[material.mat_id] || material
+                            return (
+                              <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
+                                <td className="p-2 pl-8 text-gray-800">
+                                  {isEditMode ? (
+                                    <Input
+                                      value={editedMaterial.mat_name}
+                                      onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_name', e.target.value)}
+                                      className="w-full max-w-[200px] text-gray-800"
+                                    />
                                   ) : (
-                                    <Button size="sm" variant="ghost" className="border border-black hover:bg-gray-100 text-gray-800" onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
-                                      Edit
-                                    </Button>
+                                    material.mat_name
                                   )}
                                 </td>
-                              )}
-                              <td className="p-2 text-gray-800">
-                                {isEditMode ? (
-                                  <Input
-                                    type="number"
-                                    value={editedMaterial.mat_alert}
-                                    onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_alert', parseFloat(e.target.value))}
-                                    className="w-full max-w-[100px] text-gray-800"
-                                  />
-                                ) : (
-                                  material.mat_alert
+                                <td className="p-2 text-gray-800">
+                                  {isEditMode ? (
+                                    <Input
+                                      value={editedMaterial.mat_sku}
+                                      onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_sku', e.target.value)}
+                                      className="w-full max-w-[100px] text-gray-800"
+                                    />
+                                  ) : (
+                                    material.mat_sku
+                                  )}
+                                </td>
+                                <td className="p-2 text-gray-800">
+                                  {isEditMode ? (
+                                    <Input
+                                      type="number"
+                                      value={editedMaterials[material.mat_id]?.mat_inv || material.mat_inv}
+                                      onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_inv', parseFloat(e.target.value))}
+                                      className="w-full max-w-[100px] text-gray-800"
+                                    />
+                                  ) : (
+                                    material.mat_inv
+                                  )}
+                                </td>
+                                {!isEditMode && !isPopup && (
+                                  <td className="p-2 text-gray-800">
+                                    {editingInventory[material.mat_id] !== undefined ? (
+                                      <div className="flex items-center">
+                                        <Input
+                                          type="number"
+                                          value={editingInventory[material.mat_id]}
+                                          onChange={(e) => setEditingInventory(prev => ({ ...prev, [material.mat_id]: e.target.value }))}
+                                          className="w-20 mr-2 text-gray-800"
+                                        />
+                                        <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(material.mat_id)}>
+                                          <Check className="h-4 w-4 text-green-600" />
+                                        </Button>
+                                        <Button size="sm" variant="ghost" onClick={() => handleCancelEdit(material.mat_id)}>
+                                          <X className="h-4 w-4 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button size="sm" variant="ghost" className="border border-black hover:bg-gray-100 text-gray-800"
+                                              onClick={() => handleEditInventory(material.mat_id, material.mat_inv)}>
+                                        Edit
+                                      </Button>
+                                    )}
+                                  </td>
                                 )}
-                              </td>
-                              <td className="p-2 text-gray-800"></td>
-                              {isPopup ? (
                                 <td className="p-2 text-gray-800">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => onSelectMaterial && onSelectMaterial(material.mat_id)}
-                                  >
-                                    Select
-                                  </Button>
+                                  {isEditMode ? (
+                                    <Input
+                                      type="number"
+                                      value={editedMaterial.mat_alert}
+                                      onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_alert', parseFloat(e.target.value))}
+                                      className="w-full max-w-[100px] text-gray-800"
+                                    />
+                                  ) : (
+                                    material.mat_alert
+                                  )}
                                 </td>
-                              ) : (
-                                <td className="p-2 text-gray-800">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setDeleteTarget({ type: 'material', id: material.mat_id, name: material.mat_name })}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </td>
-                              )}
-                            </tr>
-                          )
-                        })}
+                                <td className="p-2 text-gray-800"></td>
+                                {isPopup ? (
+                                  <td className="p-2 text-gray-800">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => onSelectMaterial && onSelectMaterial(material.mat_id)}
+                                    >
+                                      Select
+                                    </Button>
+                                  </td>
+                                ) : (
+                                  <td className="p-2 text-gray-800">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setDeleteTarget({ type: 'material', id: material.mat_id, name: material.mat_name })}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })
+                        )}
                       </>
                     )}
                   </Fragment>
@@ -890,7 +866,7 @@ export default function CategoryPage({ category: propCategory, isPopup = false, 
           <DialogHeader>
             <DialogTitle>Add New Brand</DialogTitle>
             <DialogDescription>
-              Create a new brand for {decodedCategory}
+              Create a new brand for {category}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
