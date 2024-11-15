@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { motion } from "framer-motion"
-import { Dialog,
+import {
+  Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -30,12 +31,19 @@ import CategoriesPage from '../../../materials/page'
 interface Material {
   mat_id: number
   mat_name: string
-  mat_sku: string
   brand_name: string
   mc_name: string
   meas_unit: string
   mat_amount: number
   mat_inv: number
+}
+
+interface CategoriesPageProps {
+  isPopup?: boolean;
+  onSelectMaterial?: (materialId: number) => void;
+  category?: string;
+  pc_id?: number;
+  measurementId?: number;
 }
 
 interface ProductVariation {
@@ -120,6 +128,15 @@ export default function ProductDetailPage() {
   const [isAddingMaterial, setIsAddingMaterial] = useState(false)
   const [selectedVariationId, setSelectedVariationId] = useState<number | null>(null)
   const [newMaterial, setNewMaterial] = useState<NewMaterial>({ mat_id: 0, mat_amount: 0 })
+  const [editingMaterial, setEditingMaterial] = useState<{
+    variationId: number;
+    materialId: number;
+    amount: string;
+  } | null>(null)
+  const [deletingMaterial, setDeletingMaterial] = useState<{
+    variationId: number;
+    materialId: number;
+  } | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -177,13 +194,6 @@ export default function ProductDetailPage() {
       }
       return next
     })
-  }
-
-  const handleEditValues = (variationId: number, currentInventory: number, currentGoal: number) => {
-    setEditingValues(prev => ({ 
-      ...prev, 
-      [variationId]: { inv: currentInventory.toString(), goal: currentGoal.toString() } 
-    }))
   }
 
   const handleCancelEdit = (variationId: number) => {
@@ -340,37 +350,18 @@ export default function ProductDetailPage() {
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.text()
-        throw new Error(errorData || 'Failed to add variation')
-      }
-
-      const responseText = await response.text()
-      let newVariationData: ProductVariation
-
-      if (responseText) {
-        try {
-          newVariationData = JSON.parse(responseText)
-        } catch (parseError) {
-          console.error('Error parsing response:', parseError)
-          throw new Error('Invalid response from server')
-        }
+      if (response.status === 201) {
+        toast({
+          title: "Success",
+          description: "Variation added successfully. Refreshing page...",
+        })
+        // Reload the page after a short delay
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
       } else {
-        newVariationData = {
-          ...newVariation,
-          var_id: Date.now(),
-          prod_id: product.prod_id,
-          materials: []
-        }
+        throw new Error('Failed to add variation')
       }
-
-      setVariations(prev => [...prev, newVariationData])
-      setIsAddingVariation(false)
-      setNewVariation({ var_name: '', var_inv: 0, var_goal: 0 })
-      toast({
-        title: "Success",
-        description: "Variation added successfully",
-      })
     } catch (error) {
       console.error('Error adding variation:', error)
       toast({
@@ -380,6 +371,7 @@ export default function ProductDetailPage() {
       })
     } finally {
       setIsSubmittingVariation(false)
+      setIsAddingVariation(false)
     }
   }
 
@@ -637,19 +629,18 @@ export default function ProductDetailPage() {
         }),
       })
 
-      if (!response.ok) {
+      if (response.status === 200) {
+        toast({
+          title: "Success",
+          description: "Material added to variation successfully. Refreshing page...",
+        })
+        // Reload the page after a short delay
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } else {
         throw new Error('Failed to add material to variation')
       }
-
-      toast({
-        title: "Success",
-        description: "Material added to variation successfully",
-      })
-
-      // Refresh the variation data
-      await fetchVariationData(selectedVariationId)
-      setIsAddingMaterial(false)
-      setNewMaterial({ mat_id: 0, mat_amount: 0 })
     } catch (error) {
       console.error('Error adding material to variation:', error)
       toast({
@@ -657,6 +648,94 @@ export default function ProductDetailPage() {
         description: "Failed to add material to variation. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsAddingMaterial(false)
+      setNewMaterial({ mat_id: 0, mat_amount: 0 })
+    }
+  }
+
+  const handleUpdateMaterialAmount = async (variationId: number, materialId: number) => {
+    if (!editingMaterial) return
+
+    const amount = parseFloat(editingMaterial.amount)
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount greater than 0.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/variationmaterials/${variationId}/${materialId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mat_amount: amount
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update material amount')
+      }
+
+      // Refresh the variation data
+      const updatedVariation = await fetchVariationData(variationId)
+      if (updatedVariation) {
+        setVariations(prev => prev.map(v => 
+          v.var_id === variationId ? updatedVariation : v
+        ))
+      }
+
+      setEditingMaterial(null)
+      toast({
+        title: "Success",
+        description: "Material amount updated successfully",
+      })
+    } catch (error) {
+      console.error('Error updating material amount:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update material amount. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteMaterial = async (variationId: number, materialId: number) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/variationmaterials/${variationId}/${materialId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete material')
+      }
+
+      // Refresh the variation data
+      const updatedVariation = await fetchVariationData(variationId)
+      if (updatedVariation) {
+        setVariations(prev => prev.map(v => 
+          v.var_id === variationId ? updatedVariation : v
+        ))
+      }
+
+      toast({
+        title: "Success",
+        description: "Material deleted successfully",
+      })
+    } catch (error) {
+      console.error('Error deleting material:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete material. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingMaterial(null)
     }
   }
 
@@ -884,22 +963,84 @@ export default function ProductDetailPage() {
                         <TableHeader>
                           <TableRow className="bg-purple-50">
                             <TableHead className="text-purple-900 font-semibold">Name</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">SKU</TableHead>
                             <TableHead className="text-purple-900 font-semibold">Brand</TableHead>
                             <TableHead className="text-purple-900 font-semibold">Category</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">Amount</TableHead>
+                            <TableHead className="text-purple-900 font-semibold">Required</TableHead>
                             <TableHead className="text-purple-900 font-semibold">Inventory</TableHead>
+                            {isEditMode && (
+                              <TableHead className="text-purple-900 font-semibold">Actions</TableHead>
+                            )}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {variation.materials.map((material) => (
                             <TableRow key={material.mat_id}>
                               <TableCell>{material.mat_name}</TableCell>
-                              <TableCell>{material.mat_sku}</TableCell>
                               <TableCell>{material.brand_name}</TableCell>
                               <TableCell>{material.mc_name}</TableCell>
-                              <TableCell>{material.mat_amount} {material.meas_unit}</TableCell>
+                              <TableCell>
+                                {editingMaterial?.materialId === material.mat_id ? (
+                                  <div className="flex items-center space-x-2">
+                                    <Input
+                                      type="number"
+                                      value={editingMaterial.amount}
+                                      onChange={(e) => setEditingMaterial(prev => ({
+                                        ...prev!,
+                                        amount: e.target.value
+                                      }))}
+                                      className="w-24"
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleUpdateMaterialAmount(variation.var_id, material.mat_id)}
+                                    >
+                                      <Check className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setEditingMaterial(null)}
+                                    >
+                                      <X className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span>
+                                    {material.mat_amount} {material.meas_unit}
+                                    {isEditMode && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setEditingMaterial({
+                                          variationId: variation.var_id,
+                                          materialId: material.mat_id,
+                                          amount: material.mat_amount.toString()
+                                        })}
+                                        className="ml-2"
+                                      >
+                                        <Pencil className="h-4 w-4 text-purple-600" />
+                                      </Button>
+                                    )}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell>{material.mat_inv} {material.meas_unit}</TableCell>
+                              {isEditMode && (
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setDeletingMaterial({
+                                      variationId: variation.var_id,
+                                      materialId: material.mat_id
+                                    })}
+                                    className="text-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -947,6 +1088,37 @@ export default function ProductDetailPage() {
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => deletingVariationId && handleDeleteVariation(deletingVariationId)}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog 
+          open={deletingMaterial !== null} 
+          onOpenChange={() => setDeletingMaterial(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Material</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to remove this material from the variation?
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (deletingMaterial) {
+                    handleDeleteMaterial(
+                      deletingMaterial.variationId,
+                      deletingMaterial.materialId
+                    )
+                  }
+                }}
                 className="bg-red-600 text-white hover:bg-red-700"
               >
                 Delete
@@ -1013,23 +1185,27 @@ export default function ProductDetailPage() {
                 <CategoriesPage 
                   isPopup={true} 
                   onSelectMaterial={handleMaterialSelection}
+                  category={category?.pc_name || ''}
+                  pc_id={category?.pc_id || 0}
+                  measurementId={0}
                 />
               </div>
-              <Input
-                type="number"
-                placeholder="Amount required"
-                value={newMaterial.mat_amount || ''}
-                onChange={(e) => handleMaterialAmountChange(parseFloat(e.target.value))}
-                className="mt-2"
-              />
-              <Button 
-                onClick={handleSaveMaterial} 
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                disabled={newMaterial.mat_id === 0}
-              >
-                Save Material
-              </Button>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="amount" className="text-right">
+                  Amount
+                </label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={newMaterial.mat_amount}
+                  onChange={(e) => handleMaterialAmountChange(parseFloat(e.target.value))}
+                  className="col-span-3"
+                />
+              </div>
             </div>
+            <Button onClick={handleSaveMaterial} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              Add Material
+            </Button>
           </DialogContent>
         </Dialog>
       </motion.div>

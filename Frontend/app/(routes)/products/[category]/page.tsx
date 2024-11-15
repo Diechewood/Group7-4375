@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
+import { Search, ArrowLeft, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, Check, X, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Link from 'next/link'
 import { useToast } from "@/hooks/use-toast"
@@ -15,6 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const formatCurrency = (value: number | string | null | undefined): string => {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -70,6 +80,7 @@ export default function ProductsCategoryPage() {
   const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set())
   const [editingInventory, setEditingInventory] = useState<{ [key: number]: { inv: string, goal: string } }>({})
   const [isAddingProduct, setIsAddingProduct] = useState(false)
+  const [isAddingProductLoading, setIsAddingProductLoading] = useState(false)
   const [newProduct, setNewProduct] = useState<NewProduct>({
     prod_name: '',
     prod_cost: 0,
@@ -79,6 +90,7 @@ export default function ProductsCategoryPage() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [editedProducts, setEditedProducts] = useState<{[key: number]: Product}>({})
   const [editedVariations, setEditedVariations] = useState<{[key: number]: ProductVariation}>({})
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
 
   const decodedCategory = decodeURIComponent(params.category as string)
 
@@ -237,8 +249,9 @@ export default function ProductsCategoryPage() {
   }
 
   const handleAddProduct = async () => {
-    if (!category) return
+    if (!category) return;
 
+    setIsAddingProductLoading(true);
     try {
       const response = await fetch('http://localhost:5000/api/products', {
         method: 'POST',
@@ -250,28 +263,32 @@ export default function ProductsCategoryPage() {
           pc_id: category.pc_id,
           img_id: null
         }),
-      })
+      });
 
-      if (response.status === 200) {
-        setIsAddingProduct(false)
-        setNewProduct({ prod_name: '', prod_cost: 0, prod_msrp: 0, prod_time: '' })
+      if (response.status === 201) {
+        setIsAddingProduct(false);
         toast({
           title: "Success",
-          description: "Product added successfully",
-        })
-        window.location.reload()
+          description: "Product added successfully. Refreshing page...",
+        });
+        // Reload the page after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
-        throw new Error('Failed to add product')
+        throw new Error('Failed to add product');
       }
     } catch (error) {
-      console.error('Error adding product:', error)
+      console.error('Error adding product:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add product. Please try again.",
+        description: "Failed to add product. Please try again.",
         variant: "destructive",
-      })
+      });
+    } finally {
+      setIsAddingProductLoading(false);
     }
-  }
+  };
 
   const handleStartEdit = () => {
     setIsEditMode(true)
@@ -386,6 +403,41 @@ export default function ProductsCategoryPage() {
     }))
   }
 
+  const handleDeleteProduct = async (product: Product) => {
+    setProductToDelete(product);
+  };
+
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/products/${productToDelete.prod_id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete product');
+      }
+
+      setProducts(prev => prev.filter(p => p.prod_id !== productToDelete.prod_id));
+      setVariations(prev => prev.filter(v => v.prod_id !== productToDelete.prod_id));
+      setProductToDelete(null);
+
+      toast({
+        title: "Success",
+        description: "Product and its variations deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete product. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="mb-6">
@@ -491,11 +543,37 @@ export default function ProductsCategoryPage() {
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setIsAddingProduct(false)}>Cancel</Button>
-            <Button onClick={handleAddProduct}>Add Product</Button>
+            <Button variant="outline" onClick={() => setIsAddingProduct(false)} disabled={isAddingProductLoading}>Cancel</Button>
+            <Button onClick={handleAddProduct} disabled={isAddingProductLoading}>
+              {isAddingProductLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Product'
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {productToDelete?.prod_name} and all its variations.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-white"></div>
@@ -535,6 +613,7 @@ export default function ProductsCategoryPage() {
                 <th className="p-2 text-gray-800 text-left font-semibold">Goal</th>
                 <th className="p-2 text-gray-800 text-right font-semibold">P.Rev</th>
                 <th className="p-2 text-gray-800 text-right font-semibold">MSRP</th>
+                <th className="p-2 text-gray-800 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -550,17 +629,23 @@ export default function ProductsCategoryPage() {
                 return (
                   <Fragment key={product.prod_id}>
                     <tr 
-                      className={`border-b border-gray-300 ${hasMultipleVariations ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}`}
-                      onClick={() => hasMultipleVariations && toggleProduct(product.prod_id)}
+                      className={`border-b border-gray-300 ${hasMultipleVariations ? 'bg-gray-50 hover:bg-gray-100' : ''}`}
                     >
                       <td className="p-2 text-gray-800">
                         <div className="flex items-center">
                           {hasMultipleVariations && (
-                            isExpanded ? (
-                              <ChevronDown className="h-4 w-4 mr-2 text-gray-600" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 mr-2 text-gray-600" />
-                            )
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mr-2"
+                              onClick={() => toggleProduct(product.prod_id)}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-600" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-600" />
+                              )}
+                            </Button>
                           )}
                           {isEditMode ? (
                             <Input
@@ -658,6 +743,19 @@ export default function ProductsCategoryPage() {
                           formatCurrency(product.prod_msrp)
                         )}
                       </td>
+                      <td className="p-2 text-gray-800 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteProduct(product)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
                     </tr>
                     {hasMultipleVariations && isExpanded && productVariations.map((variation) => {
                       const editedVariation = editedVariations[variation.var_id] || variation
@@ -728,6 +826,7 @@ export default function ProductsCategoryPage() {
                               variation.var_goal
                             )}
                           </td>
+                          <td className="p-2 text-gray-800 text-right">-</td>
                           <td className="p-2 text-gray-800 text-right">-</td>
                           <td className="p-2 text-gray-800 text-right">-</td>
                         </tr>
