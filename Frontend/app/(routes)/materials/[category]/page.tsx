@@ -229,6 +229,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: "Please enter a valid number for inventory.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -261,6 +263,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       toast({
         title: "Success",
         description: "Inventory updated successfully",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } catch (error) {
       console.error('Error updating inventory:', error)
@@ -268,6 +272,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: "Failed to update inventory. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     }
   }
@@ -344,6 +350,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         toast({
           title: "Success",
           description: "Changes saved successfully",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         })
         setIsEditMode(false)
         setEditedMaterials({})
@@ -358,6 +366,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: "Failed to save changes. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setIsLoading(false)
@@ -401,6 +411,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       toast({
         title: "Success",
         description: `${deleteTarget.type.charAt(0).toUpperCase() + deleteTarget.type.slice(1)} deleted successfully`,
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
 
       // Refresh the data
@@ -411,6 +423,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: `Failed to delete ${deleteTarget.type}. Please try again.`,
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setDeleteTarget(null)
@@ -423,6 +437,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: "Please fill in all required fields",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -450,6 +466,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       toast({
         title: "Success",
         description: "Brand created successfully",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
 
       setIsAddingBrand(false)
@@ -465,6 +483,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: (error as Error).message || "Failed to create brand. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setIsSubmitting(false)
@@ -478,6 +498,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         title: "Error",
         description: "Please fill in all required fields",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -506,6 +528,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       toast({
         title: "Success",
         description: "Material created successfully",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
 
       setIsAddingMaterial(false)
@@ -523,6 +547,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       toast({
         title: "Error",
         description: "Failed to create material. Please try again.",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
         variant: "destructive",
       })
     } finally {
@@ -877,7 +903,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newBrandData.brand_name}
                 onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_name: e.target.value }))}
                 placeholder="Enter brand name"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
@@ -889,7 +915,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newBrandData.brand_price}
                 onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_price: e.target.value }))}
                 placeholder="Enter price"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
           </div>
@@ -905,6 +931,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
             <Button
               onClick={handleAddBrand}
               disabled={isSubmitting}
+              className="bg-[#4A447C]"
             >
               {isSubmitting ? (
                 <>
@@ -920,7 +947,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       </Dialog>
 
       <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
-        <DialogContent className="bg-white border-b-2 border-[#4A447C]/20 p-6">
+        <DialogContent className="bg-white border-b-2 border-[#4A447C] p-6">
           <DialogHeader>
             <DialogTitle className="text-[#4A447C] text-xl font-semibold">Add New Material</DialogTitle>
             <DialogDescription>
@@ -935,7 +962,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newMaterialData.mat_name}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_name: e.target.value }))}
                 placeholder="Enter material name"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
@@ -945,7 +972,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newMaterialData.mat_sku}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_sku: e.target.value }))}
                 placeholder="Enter SKU"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
@@ -956,7 +983,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newMaterialData.mat_inv}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_inv: e.target.value }))}
                 placeholder="Enter initial inventory"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
@@ -967,7 +994,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newMaterialData.mat_alert}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_alert: e.target.value }))}
                 placeholder="Enter alert threshold"
-                className="border-[#4A447C]"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
           </div>
@@ -986,6 +1013,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
             <Button
               onClick={handleAddMaterial}
               disabled={isSubmitting}
+              className="bg-[#4A447C]"
             >
               {isSubmitting ? (
                 <>
