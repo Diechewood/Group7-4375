@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Menu, Gem, ListTodo, Cake } from 'lucide-react'
+import { Home, Menu, Gem } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 
 const navItems = [
