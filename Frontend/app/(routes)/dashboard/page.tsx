@@ -81,7 +81,7 @@ export default function DashboardPage() {
           <CardContent>
             <ScrollArea className="h-[calc(100vh-250px)]">
               {productAlerts.map((item) => (
-                <Alert key={item.var_id} variant="destructive" className="mb-4">
+                <Alert key={item.var_id} variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Low Inventory</AlertTitle>
                   <AlertDescription>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
           <CardContent>
             <ScrollArea className="h-[calc(100vh-250px)]">
               {materialAlerts.map((item) => (
-                <Alert key={item.mat_name} variant="destructive" className="mb-4">
+                <Alert key={item.mat_name} variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Low Inventory</AlertTitle>
                   <AlertDescription>
