@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ['mysql2'],
+  experimental: {
+    serverComponentsExternalPackages: ['mysql2'],
+  },
   images: {
     remotePatterns: [
       {
@@ -14,10 +16,10 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*', // Proxy to Backend
+        destination: 'http://backend:5000/api/:path*', // Proxy to Backend container
       },
     ]
-  },
+  },  
 };
 
 export default nextConfig;
