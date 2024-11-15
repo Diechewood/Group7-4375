@@ -21,7 +21,7 @@ Before you begin, ensure you have the following installed and running on your sy
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/frosted-fabrics.git
+   git clone https://github.com/Diechewood/Group7-4375
    cd frosted-fabrics
    ```
 
