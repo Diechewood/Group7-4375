@@ -32,10 +32,16 @@ Before you begin, ensure you have the following installed and running on your sy
 To start the application, run the following command from the root directory:
 
 ```
-docker-compose up --build
+docker-compose up --build --force-recreate
 ```
 
 This command will build the Docker images (if they haven't been built before) and start the containers. The `--build` flag ensures that the images are rebuilt if there have been any changes to the Dockerfiles or source code.
+
+If there are issues with site imports, run the following:
+
+```
+docker-compose up --build
+```
 
 Once the containers are running, you can access:
 
