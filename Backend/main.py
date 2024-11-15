@@ -903,5 +903,175 @@ def variationmaterialsDelete(var_id, mat_id):
         logger.error(f"Error in variationmaterialsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
 
+# ============== CALENDAR CATEGORIES METHODS ============
+@app.route('/api/calendarcategories', methods=['GET'])
+@app.route('/api/calendarcategories/<int:resourceid>', methods=['GET'])
+def calendarcategoriesGet(resourceid=None):
+    try:
+        if resourceid is not None:
+            query = "SELECT * FROM frostedfabrics.calendar_categories WHERE cc_id = %s"
+            params = (resourceid,)
+        else:
+            query = "SELECT * FROM frostedfabrics.calendar_categories"
+            params = None
+
+        query_results = execute_select_query(query, params)
+
+        if resourceid is not None:
+            if not query_results:
+                return make_response(jsonify({"error": "Resource not found"}), 404)
+            return make_response(jsonify(query_results[0]), 200)
+        else:
+            return make_response(jsonify(query_results), 200)
+
+    except Exception as e:
+        logger.error(f"Error in calendarcategoriesGet: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarcategories', methods=['POST'])
+def calendarcategoriesPost():
+    request_data = request.get_json()
+    try:
+        query = """
+        INSERT INTO frostedfabrics.calendar_categories (cc_name, cc_hex)
+        VALUES (%s, %s)
+        """
+        params = (request_data['cc_name'], request_data['cc_hex'])
+        execute_write_query(query, params)
+        return make_response("", 201)
+    except Exception as e:
+        logger.error(f"Error in calendarcategoriesPost: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarcategories/<int:resourceid>', methods=['PUT', 'PATCH'])
+def calendarcategoriesEdit(resourceid=None):
+    request_data = request.get_json()
+    try:
+        update_fields = ['cc_name', 'cc_hex']
+        params = []
+        query = "UPDATE frostedfabrics.calendar_categories SET "
+        query += ", ".join(f"{field} = %s" for field in update_fields if field in request_data)
+        params = [request_data[field] for field in update_fields if field in request_data]
+        query += " WHERE cc_id = %s"
+        params.append(resourceid)
+        execute_write_query(query, tuple(params))
+        return make_response("", 200)
+    except Exception as e:
+        logger.error(f"Error in calendarcategoriesEdit: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarcategories/<int:resourceid>', methods=['DELETE'])
+def calendarcategoriesDelete(resourceid=None):
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Start a transaction
+            cursor.execute("START TRANSACTION")
+            
+            try:
+                # First, delete all events associated with this category
+                cursor.execute("DELETE FROM frostedfabrics.calendar_events WHERE cc_id = %s", (resourceid,))
+                
+                # Then, delete the category itself
+                cursor.execute("DELETE FROM frostedfabrics.calendar_categories WHERE cc_id = %s", (resourceid,))
+                
+                # Commit the transaction
+                conn.commit()
+                
+                return make_response(jsonify({"message": "Calendar category and all associated events deleted successfully"}), 200)
+            except Exception as e:
+                # Rollback in case of error
+                conn.rollback()
+                raise e
+    except Exception as e:
+        logger.error(f"Error in calendarcategoriesDelete: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+# ============== CALENDAR EVENTS METHODS ============
+@app.route('/api/calendarevents', methods=['GET'])
+@app.route('/api/calendarevents/<int:resourceid>', methods=['GET'])
+def calendareventsGet(resourceid=None):
+    try:
+        if resourceid is not None:
+            query = """
+                SELECT e.*, c.cc_name, c.cc_hex
+                FROM frostedfabrics.calendar_events e
+                JOIN frostedfabrics.calendar_categories c ON e.cc_id = c.cc_id
+                WHERE e.event_id = %s
+            """
+            params = (resourceid,)
+        else:
+            query = """
+                SELECT e.*, c.cc_name, c.cc_hex
+                FROM frostedfabrics.calendar_events e
+                JOIN frostedfabrics.calendar_categories c ON e.cc_id = c.cc_id
+                ORDER BY e.event_timestamp
+            """
+            params = None
+
+        query_results = execute_select_query(query, params)
+
+        if resourceid is not None:
+            if not query_results:
+                return make_response(jsonify({"error": "Resource not found"}), 404)
+            return make_response(jsonify(query_results[0]), 200)
+        else:
+            return make_response(jsonify(query_results), 200)
+
+    except Exception as e:
+        logger.error(f"Error in calendareventsGet: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarevents', methods=['POST'])
+def calendareventsPost():
+    request_data = request.get_json()
+    try:
+        query = """
+        INSERT INTO frostedfabrics.calendar_events 
+        (cc_id, event_title, event_subtitle, event_notes, event_link, event_timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        params = (
+            request_data['cc_id'],
+            request_data['event_title'],
+            request_data.get('event_subtitle'),
+            request_data.get('event_notes'),
+            request_data.get('event_link'),
+            request_data['event_timestamp']
+        )
+        execute_write_query(query, params)
+        return make_response("", 201)
+    except Exception as e:
+        logger.error(f"Error in calendareventsPost: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarevents/<int:resourceid>', methods=['PUT', 'PATCH'])
+def calendareventsEdit(resourceid=None):
+    request_data = request.get_json()
+    try:
+        update_fields = ['cc_id', 'event_title', 'event_subtitle', 'event_notes', 'event_link', 'event_timestamp']
+        params = []
+        query = "UPDATE frostedfabrics.calendar_events SET "
+        query += ", ".join(f"{field} = %s" for field in update_fields if field in request_data)
+        params = [request_data[field] for field in update_fields if field in request_data]
+        query += " WHERE event_id = %s"
+        params.append(resourceid)
+        execute_write_query(query, tuple(params))
+        return make_response("", 200)
+    except Exception as e:
+        logger.error(f"Error in calendareventsEdit: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
+@app.route('/api/calendarevents/<int:resourceid>', methods=['DELETE'])
+def calendareventsDelete(resourceid=None):
+    try:
+        query = "DELETE FROM frostedfabrics.calendar_events WHERE event_id = %s"
+        execute_write_query(query, (resourceid,))
+        return make_response("", 200)
+    except Exception as e:
+        logger.error(f"Error in calendareventsDelete: {str(e)}")
+        return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+
 if __name__ == '__main__':
     app.run(threaded=True)
