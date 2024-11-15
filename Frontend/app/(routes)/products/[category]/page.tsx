@@ -494,60 +494,60 @@ export default function ProductsCategoryPage() {
               Edit Values
             </Button>
           )}
-          <Button variant="default" onClick={() => setIsAddingProduct(true)}>Add Product</Button>
+          <Button variant="default" className="bg-[#4A447C]" onClick={() => setIsAddingProduct(true)}>Add Product</Button>
         </div>
       </div>
       <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[425px] bg-white border border-[#4A447C]/20 p-6">
+          <DialogHeader className="text-[#4A447C] text-xl font-semibold">
             <DialogTitle>Add New Product</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="prod_name">Name</Label>
+              <Label htmlFor="prod_name" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Name</Label>
               <Input
                 id="prod_name"
                 value={newProduct.prod_name}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_name: e.target.value }))}
-                className="col-span-3"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="prod_cost">Cost</Label>
+              <Label htmlFor="prod_cost" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Cost</Label>
               <Input
                 id="prod_cost"
                 type="number"
                 value={newProduct.prod_cost}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_cost: parseFloat(e.target.value) }))}
-                className="col-span-3"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="prod_msrp">MSRP</Label>
+              <Label htmlFor="prod_msrp" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">MSRP</Label>
               <Input
                 id="prod_msrp"
                 type="number"
                 value={newProduct.prod_msrp}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_msrp: parseFloat(e.target.value) }))}
-                className="col-span-3"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="prod_time">Time</Label>
+              <Label htmlFor="prod_time" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Time</Label>
               <Input
                 id="prod_time"
                 value={newProduct.prod_time}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, prod_time: e.target.value }))}
-                className="col-span-3"
+                className="col-span-3 border-[#4A447C] text-black"
               />
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setIsAddingProduct(false)} disabled={isAddingProductLoading}>Cancel</Button>
+            <Button variant="outline" className="border-[#4A447C] text-black" onClick={() => setIsAddingProduct(false)} disabled={isAddingProductLoading}>Cancel</Button>
             <Button onClick={handleAddProduct} disabled={isAddingProductLoading}>
               {isAddingProductLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin bg-[#4A447C]" />
                   Adding...
                 </>
               ) : (

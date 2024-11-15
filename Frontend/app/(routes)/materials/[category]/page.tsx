@@ -588,7 +588,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                     <Button
                       variant="outline"
                       onClick={() => setIsAddingBrand(true)}
-                      className="bg-purple-600 text-white hover:bg-purple-700"
+                      className="bg-[#4A447C] text-white hover:bg-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       New Brand
@@ -718,7 +718,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                   setSelectedBrandId(brandId)
                                   setIsAddingMaterial(true)
                                 }}
-                                className="bg-purple-600 text-white hover:bg-purple-700 ml-6"
+                                className="bg-[#4A447C] text-white hover:bg-purple-700 ml-6"
                               >
                                 <Plus className="h-4 w-4 mr-1" />
                                 Add Material
@@ -810,7 +810,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                 </td>
                                 <td className="p-2 text-gray-800"></td>
                                 {isPopup ? (
-                                  <td className="p-2 text-gray-800">
+                                  <td className="p-2 text-gray-800 hover:bg-[#4A447C] hover:text-white">
                                     <Button 
                                       size="sm" 
                                       variant="outline" 
@@ -862,8 +862,8 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       </AlertDialog>
 
       <Dialog open={isAddingBrand} onOpenChange={setIsAddingBrand}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="bg-white border border-[#4A447C]/20 p-6">
+          <DialogHeader className="text-[#4A447C] text-xl font-semibold">
             <DialogTitle>Add New Brand</DialogTitle>
             <DialogDescription>
               Create a new brand for {category}
@@ -871,16 +871,17 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="brand_name">Brand Name</Label>
+              <Label htmlFor="brand_name" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]" >Brand Name</Label>
               <Input
                 id="brand_name"
                 value={newBrandData.brand_name}
                 onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_name: e.target.value }))}
                 placeholder="Enter brand name"
+                className="border-[#4A447C]"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="brand_price">Price</Label>
+              <Label htmlFor="brand_price" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Price</Label>
               <Input
                 id="brand_price"
                 type="number"
@@ -888,6 +889,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 value={newBrandData.brand_price}
                 onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_price: e.target.value }))}
                 placeholder="Enter price"
+                className="border-[#4A447C]"
               />
             </div>
           </div>
@@ -896,6 +898,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
               variant="outline"
               onClick={() => setIsAddingBrand(false)}
               disabled={isSubmitting}
+              className="border-[#4A447C] text-black"
             >
               Cancel
             </Button>
@@ -917,56 +920,61 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       </Dialog>
 
       <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
-        <DialogContent>
+        <DialogContent className="bg-white border-b-2 border-[#4A447C]/20 p-6">
           <DialogHeader>
-            <DialogTitle>Add New Material</DialogTitle>
+            <DialogTitle className="text-[#4A447C] text-xl font-semibold">Add New Material</DialogTitle>
             <DialogDescription>
               Create a new material for {brands.find(b => b.brand_id === selectedBrandId)?.brand_name}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="mat_name">Material Name</Label>
+              <Label htmlFor="mat_name" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Material Name</Label>
               <Input
                 id="mat_name"
                 value={newMaterialData.mat_name}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_name: e.target.value }))}
                 placeholder="Enter material name"
+                className="border-[#4A447C]"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mat_sku">SKU</Label>
+              <Label htmlFor="mat_sku" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">SKU</Label>
               <Input
                 id="mat_sku"
                 value={newMaterialData.mat_sku}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_sku: e.target.value }))}
                 placeholder="Enter SKU"
+                className="border-[#4A447C]"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mat_inv">Initial Inventory</Label>
+              <Label htmlFor="mat_inv" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Initial Inventory</Label>
               <Input
                 id="mat_inv"
                 type="number"
                 value={newMaterialData.mat_inv}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_inv: e.target.value }))}
                 placeholder="Enter initial inventory"
+                className="border-[#4A447C]"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mat_alert">Alert Threshold</Label>
+              <Label htmlFor="mat_alert" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Alert Threshold</Label>
               <Input
                 id="mat_alert"
                 type="number"
                 value={newMaterialData.mat_alert}
                 onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_alert: e.target.value }))}
                 placeholder="Enter alert threshold"
+                className="border-[#4A447C]"
               />
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
+              className="border-[#4A447C] text-[#4A447C]"
               onClick={() => {
                 setIsAddingMaterial(false)
                 setSelectedBrandId(null)

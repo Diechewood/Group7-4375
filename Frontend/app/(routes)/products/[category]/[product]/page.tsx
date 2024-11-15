@@ -310,6 +310,7 @@ export default function ProductDetailPage() {
       toast({
         title: "Success",
         description: "Values updated successfully",
+        className: "bg-green-500",
       })
 
       // Fetch the updated variation data in the background
@@ -354,6 +355,7 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Variation added successfully. Refreshing page...",
+          className: "bg-green-500",
         })
         // Reload the page after a short delay
         setTimeout(() => {
@@ -451,6 +453,7 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Changes saved successfully",
+          className: "bg-green-500",
         })
 
         // Fetch updated data in the background
@@ -549,15 +552,18 @@ export default function ProductDetailPage() {
         method: 'DELETE',
       })
 
-      if (!response.ok) {
+      if (response.status === 200) {
+        setVariations(prev => prev.filter(v => v.var_id !== variationId))
+        toast({
+          title: "Success",
+          description: "Variation deleted successfully",
+          className: "bg-green-500",
+        })
+        // Refresh the page after successful deletion
+        window.location.reload()
+      } else {
         throw new Error('Failed to delete variation')
       }
-
-      setVariations(prev => prev.filter(v => v.var_id !== variationId))
-      toast({
-        title: "Success",
-        description: "Variation deleted successfully",
-      })
     } catch (error) {
       console.error('Error deleting variation:', error)
       toast({
@@ -633,6 +639,7 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Material added to variation successfully. Refreshing page...",
+          className: "bg-green-500",
         })
         // Reload the page after a short delay
         setTimeout(() => {
@@ -694,6 +701,7 @@ export default function ProductDetailPage() {
       toast({
         title: "Success",
         description: "Material amount updated successfully",
+        className: "bg-green-500",
       })
     } catch (error) {
       console.error('Error updating material amount:', error)
@@ -711,22 +719,25 @@ export default function ProductDetailPage() {
         method: 'DELETE',
       })
 
-      if (!response.ok) {
+      if (response.status === 200) {
+        // Refresh the variation data
+        const updatedVariation = await fetchVariationData(variationId)
+        if (updatedVariation) {
+          setVariations(prev => prev.map(v => 
+            v.var_id === variationId ? updatedVariation : v
+          ))
+        }
+
+        toast({
+          title: "Success",
+          description: "Material deleted successfully",
+          className: "bg-green-500",
+        })
+        // Refresh the page after successful deletion
+        window.location.reload()
+      } else {
         throw new Error('Failed to delete material')
       }
-
-      // Refresh the variation data
-      const updatedVariation = await fetchVariationData(variationId)
-      if (updatedVariation) {
-        setVariations(prev => prev.map(v => 
-          v.var_id === variationId ? updatedVariation : v
-        ))
-      }
-
-      toast({
-        title: "Success",
-        description: "Material deleted successfully",
-      })
     } catch (error) {
       console.error('Error deleting material:', error)
       toast({
@@ -775,7 +786,7 @@ export default function ProductDetailPage() {
       >
         <Button 
           variant="ghost" 
-          className="mb-6 text-purple-700 hover:bg-purple-50" 
+          className="mb-6 text-[#4A447C] hover:bg-[#4A447C]/10" 
           onClick={() => router.back()}
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> Back
@@ -791,7 +802,7 @@ export default function ProductDetailPage() {
 
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div className="mb-4 sm:mb-0">
-            <h1 className="text-3xl font-bold mb-1 text-purple-900">
+            <h1 className="text-3xl font-bold mb-1 text-[#4A447C]">
               {isEditMode ? (
                 <Input
                   value={displayProduct.prod_name}
@@ -802,7 +813,7 @@ export default function ProductDetailPage() {
                 displayProduct.prod_name
               )}
             </h1>
-            <div className="text-sm text-purple-600 font-medium">
+            <div className="text-sm text-[#4A447C] font-medium">
               {totalInventory}/{totalGoal} {category?.pc_name.toUpperCase()}
             </div>
           </div>
@@ -810,7 +821,7 @@ export default function ProductDetailPage() {
             <div className="space-y-2 sm:space-y-0 sm:space-x-2 flex flex-col sm:flex-row">
               <Button 
                 onClick={handleSaveEdit} 
-                className="bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200 w-full sm:w-auto" 
+                className="bg-[#4A447C] hover:bg-[#363875] text-white transition-colors duration-200 w-full sm:w-auto" 
                 disabled={isSaving}
               >
                 <Check className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save'}
@@ -818,7 +829,7 @@ export default function ProductDetailPage() {
               <Button 
                 onClick={handleCancelEditMode} 
                 variant="outline" 
-                className="text-purple-600 border-purple-300 hover:bg-purple-50 transition-colors duration-200 w-full sm:w-auto"
+                className="text-[#4A447C] border-[#4A447C] hover:bg-[#4A447C]/10 transition-colors duration-200 w-full sm:w-auto"
               >
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -827,29 +838,29 @@ export default function ProductDetailPage() {
             <Button 
               onClick={handleStartEdit} 
               variant="outline" 
-              className="text-purple-600 border-purple-300 hover:bg-purple-50 transition-colors duration-200 w-full sm:w-auto"
+              className="text-[#4A447C] border-[#4A447C] hover:bg-[#4A447C]/10 transition-colors duration-200 w-full sm:w-auto"
             >
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </Button>
           )}
         </div>
 
-        <Card className="mb-8 border-purple-200 shadow-md rounded-lg overflow-hidden">
+        <Card className="mb-8 border-[#4A447C] shadow-md rounded-lg overflow-hidden">
           <CardContent className="p-6 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-purple-50">
-                  <TableHead className="text-purple-900 font-semibold">Cost</TableHead>
-                  <TableHead className="text-purple-900 font-semibold">MSRP</TableHead>
-                  <TableHead className="text-purple-700">Profit</TableHead>
-                  <TableHead className="text-purple-700">Margin</TableHead>
-                  <TableHead className="text-purple-700">Time</TableHead>
-                  <TableHead className="text-purple-700">$/hour</TableHead>
+                <TableRow className="bg-[#4A447C]/10">
+                  <TableHead className="text-[#4A447C] font-semibold">Cost</TableHead>
+                  <TableHead className="text-[#4A447C] font-semibold">MSRP</TableHead>
+                  <TableHead className="text-[#4A447C]">Profit</TableHead>
+                  <TableHead className="text-[#4A447C]">Margin</TableHead>
+                  <TableHead className="text-[#4A447C]">Time</TableHead>
+                  <TableHead className="text-[#4A447C]">$/hour</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow>
-                  <TableCell className="text-purple-900 font-bold">
+                  <TableCell className="text-[#4A447C] font-bold">
                     {isEditMode ? (
                       <Input
                         type="number"
@@ -861,7 +872,7 @@ export default function ProductDetailPage() {
                       `$${typeof displayProduct.prod_cost === 'number' ? displayProduct.prod_cost.toFixed(2) : displayProduct.prod_cost}`
                     )}
                   </TableCell>
-                  <TableCell className="text-purple-900 font-bold">
+                  <TableCell className="text-[#4A447C] font-bold">
                     {isEditMode ? (
                       <Input
                         type="number"
@@ -873,9 +884,9 @@ export default function ProductDetailPage() {
                       `$${typeof displayProduct.prod_msrp === 'number' ? displayProduct.prod_msrp.toFixed(2) : displayProduct.prod_msrp}`
                     )}
                   </TableCell>
-                  <TableCell className="text-purple-700">${profit.toFixed(2)}</TableCell>
-                  <TableCell className="text-purple-700">{margin.toFixed(2)}%</TableCell>
-                  <TableCell className="text-purple-700">
+                  <TableCell className="text-[#4A447C]">${profit.toFixed(2)}</TableCell>
+                  <TableCell className="text-[#4A447C]">{margin.toFixed(2)}%</TableCell>
+                  <TableCell className="text-[#4A447C]">
                     {isEditMode ? (
                       <Input
                         value={displayProduct.prod_time}
@@ -886,7 +897,7 @@ export default function ProductDetailPage() {
                       displayProduct.prod_time
                     )}
                   </TableCell>
-                  <TableCell className="text-purple-700">${hourlyRate.toFixed(2)}</TableCell>
+                  <TableCell className="text-[#4A447C]">${hourlyRate.toFixed(2)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -894,10 +905,10 @@ export default function ProductDetailPage() {
         </Card>
 
         <div className="mb-6 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-purple-900">Variations</h2>
+          <h2 className="text-2xl font-bold text-[#4A447C]">Variations</h2>
           <Button 
             onClick={() => setIsAddingVariation(true)} 
-            className="bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
+            className="bg-[#4A447C] hover:bg-[#363875] text-white transition-colors duration-200"
           >
             <Plus className="mr-2 h-4 w-4" /> Add Variation
           </Button>
@@ -905,7 +916,7 @@ export default function ProductDetailPage() {
 
         {displayVariations.map((variation) => (
           <Fragment key={variation.var_id}>
-            <Card className="mb-4 border-purple-200 shadow-sm rounded-lg overflow-hidden">
+            <Card className="mb-4 border-[#4A447C] shadow-sm rounded-lg overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center">
@@ -916,12 +927,12 @@ export default function ProductDetailPage() {
                       onClick={() => toggleVariation(variation.var_id)}
                     >
                       <ChevronDown
-                        className={`h-5 w-5 text-purple-600 transition-transform ${
+                        className={`h-5 w-5 text-[#4A447C] transition-transform ${
                           expandedVariations.has(variation.var_id) ? 'transform rotate-180' : ''
                         }`}
                       />
                     </Button>
-                    <h3 className="text-lg font-semibold text-purple-900">
+                    <h3 className="text-lg font-semibold text-[#4A447C]">
                       {isEditMode ? (
                         <Input
                           value={variation.var_name}
@@ -941,7 +952,7 @@ export default function ProductDetailPage() {
                         onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', e.target.value)}
                         className="w-20 text-right"
                       />
-                      <span className="text-purple-600">/</span>
+                      <span className="text-[#4A447C]">/</span>
                       <Input
                         type="number"
                         value={variation.var_goal}
@@ -950,25 +961,25 @@ export default function ProductDetailPage() {
                       />
                     </div>
                   ) : (
-                    <div className="text-purple-600 font-medium">
+                    <div className="text-[#4A447C] font-medium">
                       {variation.var_inv}/{variation.var_goal}
                     </div>
                   )}
                 </div>
                 {expandedVariations.has(variation.var_id) && (
                   <div className="mt-4">
-                    <h4 className="text-sm font-semibold text-purple-900 mb-2">Materials:</h4>
+                    <h4 className="text-sm font-semibold text-[#4A447C] mb-2">Materials:</h4>
                     {variation.materials && variation.materials.length > 0 ? (
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-purple-50">
-                            <TableHead className="text-purple-900 font-semibold">Name</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">Brand</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">Category</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">Required</TableHead>
-                            <TableHead className="text-purple-900 font-semibold">Inventory</TableHead>
+                          <TableRow className="bg-[#4A447C]/10">
+                            <TableHead className="text-[#4A447C] font-semibold">Name</TableHead>
+                            <TableHead className="text-[#4A447C] font-semibold">Brand</TableHead>
+                            <TableHead className="text-[#4A447C] font-semibold">Category</TableHead>
+                            <TableHead className="text-[#4A447C] font-semibold">Required</TableHead>
+                            <TableHead className="text-[#4A447C] font-semibold">Inventory</TableHead>
                             {isEditMode && (
-                              <TableHead className="text-purple-900 font-semibold">Actions</TableHead>
+                              <TableHead className="text-[#4A447C] font-semibold">Actions</TableHead>
                             )}
                           </TableRow>
                         </TableHeader>
@@ -1019,7 +1030,7 @@ export default function ProductDetailPage() {
                                         })}
                                         className="ml-2"
                                       >
-                                        <Pencil className="h-4 w-4 text-purple-600" />
+                                        <Pencil className="h-4 w-4 text-[#4A447C]" />
                                       </Button>
                                     )}
                                   </span>
@@ -1046,12 +1057,12 @@ export default function ProductDetailPage() {
                         </TableBody>
                       </Table>
                     ) : (
-                      <p className="text-purple-600">No materials added yet.</p>
+                      <p className="text-[#4A447C]">No materials added yet.</p>
                     )}
                     {!isEditMode && (
                       <Button 
                         onClick={() => handleAddMaterial(variation.var_id)} 
-                        className="mt-4 bg-purple-600 hover:bg-purple-700 text-white transition-colors duration-200"
+                        className="mt-4 bg-[#4A447C] hover:bg-[#363875] text-white transition-colors duration-200"
                       >
                         <Plus className="mr-2 h-4 w-4" /> Add Material
                       </Button>
@@ -1074,18 +1085,17 @@ export default function ProductDetailPage() {
             )}
           </Fragment>
         ))}
-
         <AlertDialog open={deletingVariationId !== null} onOpenChange={() => setDeletingVariationId(null)}>
-          <AlertDialogContent>
+          <AlertDialogContent className="bg-white border border-[#4A447C]/20">
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
+              <AlertDialogTitle className="text-[#4A447C] text-xl font-semibold">Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription className="text-[#4A447C]/70">
                 This action cannot be undone. This will permanently delete the variation
                 and all associated data.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="bg-white text-[#4A447C] border-[#4A447C] hover:bg-[#4A447C]/10">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => deletingVariationId && handleDeleteVariation(deletingVariationId)}
                 className="bg-red-600 text-white hover:bg-red-700"
@@ -1100,16 +1110,16 @@ export default function ProductDetailPage() {
           open={deletingMaterial !== null} 
           onOpenChange={() => setDeletingMaterial(null)}
         >
-          <AlertDialogContent>
+          <AlertDialogContent className="bg-white border border-[#4A447C]/20">
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Material</AlertDialogTitle>
-              <AlertDialogDescription>
+              <AlertDialogTitle className="text-[#4A447C] text-xl font-semibold">Delete Material</AlertDialogTitle>
+              <AlertDialogDescription className="text-[#4A447C]/70">
                 Are you sure you want to remove this material from the variation?
                 This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="bg-white text-[#4A447C] border-[#4A447C] hover:bg-[#4A447C]/10">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
                   if (deletingMaterial) {
@@ -1128,24 +1138,24 @@ export default function ProductDetailPage() {
         </AlertDialog>
 
         <Dialog open={isAddingVariation} onOpenChange={() => setIsAddingVariation(false)}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="bg-white border border-[#4A447C]/20 p-6">
             <DialogHeader>
-              <DialogTitle>Add New Variation</DialogTitle>
+              <DialogTitle className="text-[#4A447C] text-xl font-semibold">Add New Variation</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="name" className="text-right">
+                <label htmlFor="name" className="text-right text-[#4A447C] font-medium">
                   Name
                 </label>
                 <Input
                   id="name"
                   value={newVariation.var_name}
                   onChange={(e) => setNewVariation({ ...newVariation, var_name: e.target.value })}
-                  className="col-span-3"
+                  className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="inventory" className="text-right">
+                <label htmlFor="inventory" className="text-right text-[#4A447C] font-medium">
                   Inventory
                 </label>
                 <Input
@@ -1153,11 +1163,11 @@ export default function ProductDetailPage() {
                   type="number"
                   value={newVariation.var_inv}
                   onChange={(e) => setNewVariation({ ...newVariation, var_inv: parseInt(e.target.value) })}
-                  className="col-span-3"
+                  className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="goal" className="text-right">
+                <label htmlFor="goal" className="text-right text-[#4A447C] font-medium">
                   Goal
                 </label>
                 <Input
@@ -1165,47 +1175,57 @@ export default function ProductDetailPage() {
                   type="number"
                   value={newVariation.var_goal}
                   onChange={(e) => setNewVariation({ ...newVariation, var_goal: parseInt(e.target.value) })}
-                  className="col-span-3"
+                  className="col-span-3 border-[#4A447C]/20 focus:border-[#4A447C] text-[#4A447C] focus:ring-[#4A447C]"
                 />
               </div>
             </div>
-            <Button onClick={handleAddVariation} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+            <Button 
+              onClick={handleAddVariation} 
+              className="w-full bg-[#4A447C] hover:bg-[#363875] text-white font-medium"
+            >
               {isSubmittingVariation ? 'Adding...' : 'Add Variation'}
             </Button>
           </DialogContent>
         </Dialog>
 
         <Dialog open={isAddingMaterial} onOpenChange={() => setIsAddingMaterial(false)}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Add Material to Variation</DialogTitle>
+          <DialogContent className="bg-white border border-[#4A447C]/20 sm:max-w-[800px] p-0">
+            <DialogHeader className="p-6 border-b border-[#4A447C]/20">
+              <DialogTitle className="text-[#4A447C] text-xl font-semibold">Add Material to Variation</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="h-[400px] overflow-y-auto">
-                <CategoriesPage 
-                  isPopup={true} 
-                  onSelectMaterial={handleMaterialSelection}
-                  category={category?.pc_name || ''}
-                  pc_id={category?.pc_id || 0}
-                  measurementId={0}
-                />
+            <div className="flex flex-col h-[600px]">
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="bg-white rounded-lg">
+                  <CategoriesPage 
+                    isPopup={true} 
+                    onSelectMaterial={handleMaterialSelection}
+                    category={category?.pc_name || ''}
+                    pc_id={category?.pc_id || 0}
+                    measurementId={0}
+                  />
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="amount" className="text-right">
-                  Amount
-                </label>
-                <Input
-                  id="amount"
-                  type="number"
-                  value={newMaterial.mat_amount}
-                  onChange={(e) => handleMaterialAmountChange(parseFloat(e.target.value))}
-                  className="col-span-3"
-                />
+              <div className="border-t border-[#4A447C]/20 p-6 bg-white">
+                <div className="grid grid-cols-4 items-center gap-4 mb-4">
+                  <label htmlFor="amount" className="text-right text-[#4A447C] font-medium">
+                    Amount
+                  </label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={newMaterial.mat_amount}
+                    onChange={(e) => handleMaterialAmountChange(parseFloat(e.target.value))}
+                    className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]"
+                  />
+                </div>
+                <Button 
+                  onClick={handleSaveMaterial} 
+                  className="w-full bg-[#4A447C] hover:bg-[#363875] text-white font-medium"
+                >
+                  Add Material
+                </Button>
               </div>
             </div>
-            <Button onClick={handleSaveMaterial} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
-              Add Material
-            </Button>
           </DialogContent>
         </Dialog>
       </motion.div>

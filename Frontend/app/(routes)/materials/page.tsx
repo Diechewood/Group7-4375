@@ -218,7 +218,7 @@ export default function CategoriesPage({ isPopup = false, onSelectMaterial }: Ca
           <Button
             key={category.mc_id}
             variant="outline"
-            className="h-32 border-2 border-[#4A447C] rounded-md hover:bg-[#4A447C] hover:text-white transition-colors flex items-center justify-center text-xl font-medium text-[#4A447C]"
+            className="h-32 border-2 border-[#4A447C] rounded-md :bg-[#4A44hover7C] hover:text-white transition-colors flex items-center justify-center text-xl font-medium text-[#4A447C]"
             onClick={() => handleCategoryClick(category)}
           >
             {category.mc_name}
