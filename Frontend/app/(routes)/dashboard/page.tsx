@@ -69,6 +69,8 @@ export default function DashboardPage() {
   const [editingEventId, setEditingEventId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<CalendarCategory | null>(null)
+  const [showDeleteWarning, setShowDeleteWarning] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -138,16 +140,23 @@ export default function DashboardPage() {
     }
   }
 
-  const handleDeleteCategory = async (categoryId: number) => {
+  const handleDeleteCategory = async (category: CalendarCategory) => {
+    setCategoryToDelete(category)
+    setShowDeleteWarning(true)
+  }
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return
     setIsLoading(true)
     try {
-      const response = await fetch(`http://localhost:5000/api/calendarcategories/${categoryId}`, {
+      const response = await fetch(`http://localhost:5000/api/calendarcategories/${categoryToDelete.cc_id}`, {
         method: 'DELETE',
       })
 
       if (response.ok) {
         await fetchData()
-        setIsAddingCategory(false)
+        setShowDeleteWarning(false)
+        setCategoryToDelete(null)
       } else {
         console.error('Failed to delete category')
       }
@@ -267,63 +276,67 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-[#E5D5FF] p-4 rounded-lg flex items-center justify-center">
               <TooltipProvider>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDayClick}
-                className="rounded-md bg-white"
-                modifiers={{
-                  event: (date: Date) => getEventsForDate(date).length > 0
-                }}
-                modifiersStyles={{
-                  event: {
-                    backgroundColor: 'transparent'
-                  }
-                }}
-                components={{
-                  Day: ({ date, ...props }) => {
-                    const dateEvents = getEventsForDate(date)
-                    const hasEvent = dateEvents.length > 0
-                    return (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            {...props}
-                            className={cn(
-                              "w-8 h-8 p-0 font-normal aria-selected:opacity-100 rounded-md transition-colors",
-                              hasEvent && "text-white hover:opacity-80",
-                              !hasEvent && "hover:bg-gray-100"
-                            )}
-                            style={hasEvent ? { 
-                              backgroundColor: dateEvents[0].cc_hex,
-                              opacity: 0.8
-                            } : {}}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              handleDayClick(date)
-                            }}
-                          >
-                            {date.getDate()}
-                          </button>
-                        </TooltipTrigger>
-                        {hasEvent && (
-                          <TooltipContent className="bg-[#4A4A7C] border-none text-white">
-                            {dateEvents.map((event, index) => (
-                              <div key={index} className="flex items-center gap-2">
-                                <div 
-                                  className="w-2 h-2 rounded-full" 
-                                  style={{ backgroundColor: event.cc_hex }}
-                                />
-                                {event.event_title}
-                              </div>
-                            ))}
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    )
-                  },
-                }}
-              />
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDayClick}
+                  className="rounded-md bg-white"
+                  modifiers={{
+                    event: (date) => getEventsForDate(date).length > 0
+                  }}
+                  modifiersStyles={{
+                    event: {
+                      backgroundColor: 'transparent'
+                    }
+                  }}
+                  components={{
+                    Day: ({ date, displayMonth, ...props }) => {
+                      const dateEvents = getEventsForDate(date)
+                      const hasEvent = dateEvents.length > 0
+                      const isOutsideMonth = date.getMonth() !== displayMonth.getMonth()
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              {...props}
+                              className={cn(
+                                "w-8 h-8 p-0 font-normal aria-selected:opacity-100 rounded-md transition-colors",
+                                hasEvent && "text-white hover:opacity-80",
+                                !hasEvent && "hover:bg-gray-100",
+                                isOutsideMonth && "text-muted-foreground opacity-50"
+                              )}
+                              style={hasEvent ? { 
+                                backgroundColor: dateEvents[0].cc_hex,
+                                opacity: 0.8
+                              } : {}}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (!isOutsideMonth) {
+                                  handleDayClick(date)
+                                }
+                              }}
+                            >
+                              {date.getDate()}
+                            </button>
+                          </TooltipTrigger>
+                          {hasEvent && !isOutsideMonth && (
+                            <TooltipContent className="bg-[#4A4A7C] border-none text-white">
+                              {dateEvents.map((event, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <div 
+                                    className="w-2 h-2 rounded-full" 
+                                    style={{ backgroundColor: event.cc_hex }}
+                                  />
+                                  {event.event_title}
+                                </div>
+                              ))}
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      )
+                    },
+                  }}
+                />
               </TooltipProvider>
             </div>
 
@@ -489,74 +502,101 @@ export default function DashboardPage() {
       </Dialog>
 
       <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
-      <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
-        <DialogHeader>
-          <DialogTitle>Categories</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category-name" className="text-right">
-              Name
-            </Label>
-            <Input
-              id="category-name"
-              value={newCategory.cc_name}
-              onChange={(e) => setNewCategory({ ...newCategory, cc_name: e.target.value })}
-              className="col-span-3 bg-white/10 border-white/20 text-white"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category-color" className="text-right">
-              Color
-            </Label>
-            <Input
-              id="category-color"
-              type="color"
-              value={newCategory.cc_hex}
-              onChange={(e) => setNewCategory({ ...newCategory, cc_hex: e.target.value })}
-              className="col-span-3 bg-white/10 border-white/20 h-10"
-            />
-          </div>
-          <Separator className="my-4" />
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium">Existing Categories</h4>
-            <div className="grid gap-2">
-              {categories.map((category) => (
-                <div key={category.cc_id} className="flex items-center justify-between bg-white/10 p-2 rounded-md">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-4 h-4 rounded-full" 
-                      style={{ backgroundColor: category.cc_hex }}
-                    />
-                    <span>{category.cc_name}</span>
+        <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
+          <DialogHeader>
+            <DialogTitle>Categories</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="category-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="category-name"
+                value={newCategory.cc_name}
+                onChange={(e) => setNewCategory({ ...newCategory, cc_name: e.target.value })}
+                className="col-span-3 bg-white/10 border-white/20 text-white"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="category-color" className="text-right">
+                Color
+              </Label>
+              <Input
+                id="category-color"
+                type="color"
+                value={newCategory.cc_hex}
+                onChange={(e) => setNewCategory({ ...newCategory, cc_hex: e.target.value })}
+                className="col-span-3 bg-white/10 border-white/20 h-10"
+              />
+            </div>
+            <Separator className="my-4" />
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Existing Categories</h4>
+              <div className="grid gap-2">
+                {categories.map((category) => (
+                  <div key={category.cc_id} className="flex items-center justify-between bg-white/10 p-2 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-4 rounded-full" 
+                        style={{ backgroundColor: category.cc_hex }}
+                      />
+                      <span>{category.cc_name}</span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="hover:bg-white/20"
+                      onClick={() => handleDeleteCategory(category)}
+                      disabled={isLoading}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="hover:bg-white/20"
-                    onClick={() => handleDeleteCategory(category.cc_id)}
-                    disabled={isLoading}
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-        <DialogFooter>
-          <Button 
-            onClick={handleAddCategory}
-            disabled={isLoading}
-            className="bg-white text-[#4A4A7C] hover:bg-white/90"
-          >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Add Category
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button 
+              onClick={handleAddCategory}
+              disabled={isLoading}
+              className="bg-white text-[#4A4A7C] hover:bg-white/90"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
+      <Dialog open={showDeleteWarning} onOpenChange={setShowDeleteWarning}>
+        <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
+          <DialogHeader>
+            <DialogTitle>Warning</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Deleting the category "{categoryToDelete?.cc_name}" will also delete all associated events. Are you sure you want to proceed?</p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setShowDeleteWarning(false)}
+              variant="outline"
+              className="bg-white/10 text-white hover:bg-white/20"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmDeleteCategory}
+              disabled={isLoading}
+              className="bg-red-500 text-white hover:bg-red-600"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
