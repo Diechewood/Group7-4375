@@ -167,9 +167,30 @@ def productsEdit(resourceid=None):
 @app.route('/api/products/<int:resourceid>', methods=['DELETE'])
 def productsDelete(resourceid=None):
     try:
-        query = "DELETE FROM frostedfabrics.products WHERE prod_id = %s"
-        execute_write_query(query, (resourceid,))
-        return make_response("", 200)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Start a transaction
+            cursor.execute("START TRANSACTION")
+            
+            try:
+                # First, delete associated variation materials
+                cursor.execute("DELETE vm FROM frostedfabrics.variation_materials vm INNER JOIN frostedfabrics.product_variations pv ON vm.var_id = pv.var_id WHERE pv.prod_id = %s", (resourceid,))
+                
+                # Then, delete associated variations
+                cursor.execute("DELETE FROM frostedfabrics.product_variations WHERE prod_id = %s", (resourceid,))
+                
+                # Finally, delete the product
+                cursor.execute("DELETE FROM frostedfabrics.products WHERE prod_id = %s", (resourceid,))
+                
+                # Commit the transaction
+                conn.commit()
+                
+                return make_response(jsonify({"message": "Product, variations, and materials deleted successfully"}), 200)
+            except Exception as e:
+                # Rollback in case of error
+                conn.rollback()
+                raise e
     except Exception as e:
         logger.error(f"Error in productsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
@@ -337,12 +358,31 @@ def productvariationsEdit(resourceid=None):
 @app.route('/api/productvariations/<int:resourceid>', methods=['DELETE'])
 def productvariationsDelete(resourceid=None):
     try:
-        query = "DELETE FROM frostedfabrics.product_variations WHERE var_id = %s"
-        execute_write_query(query, (resourceid,))
-        return make_response("", 200)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Start a transaction
+            cursor.execute("START TRANSACTION")
+            
+            try:
+                # First, delete associated variation materials
+                cursor.execute("DELETE FROM frostedfabrics.variation_materials WHERE var_id = %s", (resourceid,))
+                
+                # Then, delete the variation
+                cursor.execute("DELETE FROM frostedfabrics.product_variations WHERE var_id = %s", (resourceid,))
+                
+                # Commit the transaction
+                conn.commit()
+                
+                return make_response(jsonify({"message": "Variation and associated materials deleted successfully"}), 200)
+            except Exception as e:
+                # Rollback in case of error
+                conn.rollback()
+                raise e
     except Exception as e:
         logger.error(f"Error in productvariationsDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+    
 
 # ============== PRODUCT CATEGORIES METHODS ============
 @app.route('/api/productcategories', methods=['GET'])
@@ -404,12 +444,47 @@ def productcategoriesEdit(resourceid=None):
 @app.route('/api/productcategories/<int:resourceid>', methods=['DELETE'])
 def productcategoriesDelete(resourceid=None):
     try:
-        query = "DELETE FROM frostedfabrics.product_categories WHERE pc_id = %s"
-        execute_write_query(query, (resourceid,))
-        return make_response("", 200)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Start a transaction
+            cursor.execute("START TRANSACTION")
+            
+            try:
+                # First, delete associated variation materials
+                cursor.execute("""
+                    DELETE vm FROM frostedfabrics.variation_materials vm
+                    INNER JOIN frostedfabrics.product_variations pv ON vm.var_id = pv.var_id
+                    INNER JOIN frostedfabrics.products p ON pv.prod_id = p.prod_id
+                    WHERE p.pc_id = %s
+                """, (resourceid,))
+                
+                # Then, delete associated product variations
+                cursor.execute("""
+                    DELETE pv FROM frostedfabrics.product_variations pv
+                    INNER JOIN frostedfabrics.products p ON pv.prod_id = p.prod_id
+                    WHERE p.pc_id = %s
+                """, (resourceid,))
+                
+                # Delete products in the category
+                cursor.execute("DELETE FROM frostedfabrics.products WHERE pc_id = %s", (resourceid,))
+                
+                # Finally, delete the product category
+                cursor.execute("DELETE FROM frostedfabrics.product_categories WHERE pc_id = %s", (resourceid,))
+                
+                # Commit the transaction
+                conn.commit()
+                
+                return make_response(jsonify({"message": "Product category and all associated records deleted successfully"}), 200)
+            except Exception as e:
+                # Rollback in case of error
+                conn.rollback()
+                raise e
     except Exception as e:
         logger.error(f"Error in productcategoriesDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
+    
+
 
 # ============== MATERIAL CATEGORIES METHODS ============
 @app.route('/api/materialcategories', methods=['GET'])
@@ -480,9 +555,42 @@ def materialcategoriesEdit(resourceid=None):
 @app.route('/api/materialcategories/<int:resourceid>', methods=['DELETE'])
 def materialcategoriesDelete(resourceid=None):
     try:
-        query = "DELETE FROM frostedfabrics.material_categories WHERE mc_id = %s"
-        execute_write_query(query, (resourceid,))
-        return make_response("", 200)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Start a transaction
+            cursor.execute("START TRANSACTION")
+            
+            try:
+                # Delete associated variation materials
+                cursor.execute("""
+                    DELETE vm FROM frostedfabrics.variation_materials vm
+                    INNER JOIN frostedfabrics.materials m ON vm.mat_id = m.mat_id
+                    INNER JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                    WHERE mb.mc_id = %s
+                """, (resourceid,))
+                
+                # Delete associated materials
+                cursor.execute("""
+                    DELETE m FROM frostedfabrics.materials m
+                    INNER JOIN frostedfabrics.material_brands mb ON m.brand_id = mb.brand_id
+                    WHERE mb.mc_id = %s
+                """, (resourceid,))
+                
+                # Delete material brands in the category
+                cursor.execute("DELETE FROM frostedfabrics.material_brands WHERE mc_id = %s", (resourceid,))
+                
+                # Finally, delete the material category
+                cursor.execute("DELETE FROM frostedfabrics.material_categories WHERE mc_id = %s", (resourceid,))
+                
+                # Commit the transaction
+                conn.commit()
+                
+                return make_response(jsonify({"message": "Material category and all associated records deleted successfully"}), 200)
+            except Exception as e:
+                # Rollback in case of error
+                conn.rollback()
+                raise e
     except Exception as e:
         logger.error(f"Error in materialcategoriesDelete: {str(e)}")
         return make_response(jsonify({"error": "Internal Server Error", "details": str(e)}), 500)
