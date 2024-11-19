@@ -212,6 +212,8 @@ export default function ProductsCategoryPage() {
         title: "Error",
         description: "Please enter valid numbers for inventory and goal.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -237,6 +239,8 @@ export default function ProductsCategoryPage() {
       toast({
         title: "Success",
         description: "Inventory and goal updated successfully",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } catch (error) {
       console.error('Error updating inventory and goal:', error)
@@ -244,6 +248,8 @@ export default function ProductsCategoryPage() {
         title: "Error",
         description: "Failed to update inventory and goal. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     }
   }
@@ -270,6 +276,8 @@ export default function ProductsCategoryPage() {
         toast({
           title: "Success",
           description: "Product added successfully. Refreshing page...",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         });
         // Reload the page after a short delay
         setTimeout(() => {
@@ -284,6 +292,8 @@ export default function ProductsCategoryPage() {
         title: "Error",
         description: "Failed to add product. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       });
     } finally {
       setIsAddingProductLoading(false);
@@ -363,6 +373,8 @@ export default function ProductsCategoryPage() {
         toast({
           title: "Success",
           description: "Changes saved successfully",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         });
         setIsEditMode(false);
         setEditedProducts({});
@@ -377,6 +389,8 @@ export default function ProductsCategoryPage() {
         title: "Error",
         description: "Failed to save changes. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       });
     } finally {
       setIsLoading(false);
@@ -427,6 +441,8 @@ export default function ProductsCategoryPage() {
       toast({
         title: "Success",
         description: "Product and its variations deleted successfully",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       });
     } catch (error) {
       console.error('Error deleting product:', error);
@@ -434,6 +450,8 @@ export default function ProductsCategoryPage() {
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete product. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       });
     }
   };
@@ -603,17 +621,17 @@ export default function ProductsCategoryPage() {
           <AlertDescription>No products match your search criteria. Try adjusting your search term.</AlertDescription>
         </Alert>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
+        <div className="bg-[#4A447C] rounded-lg shadow overflow-x-auto flex-1 border border-[#4A447C]/20">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-300">
-                <th className="p-2 text-gray-800 text-left font-semibold">Name</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Quick Add</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Inv</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">Goal</th>
-                <th className="p-2 text-gray-800 text-right font-semibold">P.Rev</th>
-                <th className="p-2 text-gray-800 text-right font-semibold">MSRP</th>
-                <th className="p-2 text-gray-800 text-right font-semibold">Actions</th>
+              <tr className="border-b border-[#4A447C]/20">
+                <th className="p-3 text-left font-semibold text-white">Name</th>
+                <th className="p-3 text-left font-semibold text-white">Quick Add</th>
+                <th className="p-3 text-left font-semibold text-white">Inv</th>
+                <th className="p-3 text-left font-semibold text-white">Goal</th>
+                <th className="p-3 text-right font-semibold text-white">P.Rev</th>
+                <th className="p-3 text-right font-semibold text-white">MSRP</th>
+                <th className="p-3 text-right font-semibold text-white">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -629,21 +647,21 @@ export default function ProductsCategoryPage() {
                 return (
                   <Fragment key={product.prod_id}>
                     <tr 
-                      className={`border-b border-gray-300 ${hasMultipleVariations ? 'bg-gray-50 hover:bg-gray-100' : ''}`}
+                      className={`border-b border-[#4A447C]/20 ${hasMultipleVariations ? 'bg-[#E5D5FF] hover:bg-[#E5D5FF]/80' : 'bg-white hover:bg-gray-50'}`}
                     >
-                      <td className="p-2 text-gray-800">
+                      <td className="p-3 text-[#4A447C]">
                         <div className="flex items-center">
                           {hasMultipleVariations && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="mr-2"
+                              className="mr-2 text-[#4A447C]"
                               onClick={() => toggleProduct(product.prod_id)}
                             >
                               {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-gray-600" />
+                                <ChevronDown className="h-4 w-4" />
                               ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-600" />
+                                <ChevronRight className="h-4 w-4" />
                               )}
                             </Button>
                           )}
@@ -651,19 +669,19 @@ export default function ProductsCategoryPage() {
                             <Input
                               value={editedProduct.prod_name}
                               onChange={(e) => handleProductEdit(product.prod_id, 'prod_name', e.target.value)}
-                              className="w-full max-w-[200px]"
+                              className="w-full max-w-[200px] bg-white text-[#4A447C]"
                             />
                           ) : (
                             <Link 
                               href={`/products/${encodeURIComponent(decodedCategory)}/${product.prod_id}`}
-                              className="hover:underline"
+                              className="hover:underline font-medium text-[#4A447C]"
                             >
-                              <span className="font-medium">{product.prod_name}</span>
+                              {product.prod_name}
                             </Link>
                           )}
                         </div>
                       </td>
-                      <td className="p-2 text-gray-800">
+                      <td className="p-3 text-[#4A447C]">
                         {singleVariation && (
                           editingInventory[singleVariation.var_id] !== undefined ? (
                             <div className="flex items-center space-x-2">
@@ -674,7 +692,7 @@ export default function ProductsCategoryPage() {
                                   ...prev, 
                                   [singleVariation.var_id]: { ...prev[singleVariation.var_id], inv: e.target.value }
                                 }))}
-                                className="w-20 bg-white text-gray-800 border-gray-300"
+                                className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                               />
                               <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(singleVariation.var_id)}>
                                 <Check className="h-4 w-4 text-green-600" />
@@ -688,62 +706,62 @@ export default function ProductsCategoryPage() {
                               size="sm" 
                               variant="outline" 
                               onClick={() => handleEditInventory(singleVariation.var_id, singleVariation.var_inv, singleVariation.var_goal)}
-                              className="border-gray-800"
+                              className="border-[#4A447C] text-[#4A447C]"
                             >
                               Edit
                             </Button>
                           )
                         )}
                       </td>
-                      <td className="p-2 text-gray-800">
+                      <td className="p-3 text-[#4A447C]">
                         {isEditMode && singleVariation ? (
                           <Input
                             type="number"
                             value={editedVariations[singleVariation.var_id]?.var_inv || singleVariation.var_inv}
                             onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_inv', parseInt(e.target.value))}
-                            className="w-20"
+                            className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           totalInv
                         )}
                       </td>
-                      <td className="p-2 text-gray-800">
+                      <td className="p-3 text-[#4A447C]">
                         {isEditMode && singleVariation ? (
                           <Input
                             type="number"
                             value={editedVariations[singleVariation.var_id]?.var_goal || singleVariation.var_goal}
                             onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_goal', parseInt(e.target.value))}
-                            className="w-20"
+                            className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           totalGoal
                         )}
                       </td>
-                      <td className="p-2 text-gray-800 text-right">
+                      <td className="p-3 text-[#4A447C] text-right">
                         {isEditMode ? (
                           <Input
                             type="number"
                             value={editedProduct.prod_cost}
                             onChange={(e) => handleProductEdit(product.prod_id, 'prod_cost', parseFloat(e.target.value))}
-                            className="w-24 ml-auto"
+                            className="w-24 ml-auto bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           formatCurrency(product.prod_cost)
                         )}
                       </td>
-                      <td className="p-2 text-gray-800 text-right">
+                      <td className="p-3 text-[#4A447C] text-right">
                         {isEditMode ? (
                           <Input
                             type="number"
                             value={editedProduct.prod_msrp}
                             onChange={(e) => handleProductEdit(product.prod_id, 'prod_msrp', parseFloat(e.target.value))}
-                            className="w-24 ml-auto"
+                            className="w-24 ml-auto bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           formatCurrency(product.prod_msrp)
                         )}
                       </td>
-                      <td className="p-2 text-gray-800 text-right">
+                      <td className="p-3 text-[#4A447C] text-right">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -760,19 +778,19 @@ export default function ProductsCategoryPage() {
                     {hasMultipleVariations && isExpanded && productVariations.map((variation) => {
                       const editedVariation = editedVariations[variation.var_id] || variation
                       return (
-                        <tr key={variation.var_id} className="border-b border-gray-300 last:border-b-0 bg-white">
-                          <td className="p-2 pl-8 text-gray-800">
+                        <tr key={variation.var_id} className="border-b border-[#4A447C]/10 last:border-b-0 bg-white hover:bg-gray-50">
+                          <td className="p-3 pl-8 text-[#4A447C]">
                             {isEditMode ? (
                               <Input
                                 value={editedVariation.var_name}
                                 onChange={(e) => handleVariationEdit(variation.var_id, 'var_name', e.target.value)}
-                                className="w-full max-w-[200px]"
+                                className="w-full max-w-[200px] bg-white text-[#4A447C] border-[#4A447C]/20"
                               />
                             ) : (
                               variation.var_name
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">
+                          <td className="p-3 text-[#4A447C]">
                             {editingInventory[variation.var_id] !== undefined ? (
                               <div className="flex items-center space-x-2">
                                 <Input
@@ -782,7 +800,7 @@ export default function ProductsCategoryPage() {
                                     ...prev, 
                                     [variation.var_id]: { ...prev[variation.var_id], inv: e.target.value }
                                   }))}
-                                  className="w-20 bg-white text-gray-800 border-gray-300"
+                                  className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                                 />
                                 <Button size="sm" variant="ghost" onClick={() => handleUpdateInventory(variation.var_id)}>
                                   <Check className="h-4 w-4 text-green-600" />
@@ -796,39 +814,39 @@ export default function ProductsCategoryPage() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleEditInventory(variation.var_id, variation.var_inv, variation.var_goal)}
-                                className="border-gray-800"
+                                className="border-[#4A447C] text-[#4A447C]"
                               >
                                 Edit
                               </Button>
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">
+                          <td className="p-3 text-[#4A447C]">
                             {isEditMode ? (
                               <Input
                                 type="number"
                                 value={editedVariation.var_inv}
                                 onChange={(e) => handleVariationEdit(variation.var_id, 'var_inv', parseInt(e.target.value))}
-                                className="w-20"
+                                className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                               />
                             ) : (
                               variation.var_inv
                             )}
                           </td>
-                          <td className="p-2 text-gray-800">
+                          <td className="p-3 text-[#4A447C]">
                             {isEditMode ? (
                               <Input
                                 type="number"
                                 value={editedVariation.var_goal}
                                 onChange={(e) => handleVariationEdit(variation.var_id, 'var_goal', parseInt(e.target.value))}
-                                className="w-20"
+                                className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                               />
                             ) : (
                               variation.var_goal
                             )}
                           </td>
-                          <td className="p-2 text-gray-800 text-right">-</td>
-                          <td className="p-2 text-gray-800 text-right">-</td>
-                          <td className="p-2 text-gray-800 text-right">-</td>
+                          <td className="p-3 text-[#4A447C] text-right">-</td>
+                          <td className="p-3 text-[#4A447C] text-right">-</td>
+                          <td className="p-3 text-[#4A447C] text-right">-</td>
                         </tr>
                       )
                     })}

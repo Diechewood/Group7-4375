@@ -250,6 +250,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Failed to fetch updated variation data. Please refresh the page.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     }
   }
@@ -270,6 +272,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Please enter valid numbers for inventory and goal.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -280,6 +284,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Variation not found.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -310,7 +316,8 @@ export default function ProductDetailPage() {
       toast({
         title: "Success",
         description: "Values updated successfully",
-        className: "bg-green-500",
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
 
       // Fetch the updated variation data in the background
@@ -328,6 +335,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Failed to update values. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       handleCancelEdit(variationId)
@@ -355,7 +364,8 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Variation added successfully. Refreshing page...",
-          className: "bg-green-500",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         })
         // Reload the page after a short delay
         setTimeout(() => {
@@ -370,6 +380,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to add variation. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setIsSubmittingVariation(false)
@@ -470,6 +482,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save changes. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       setIsEditMode(true) // Re-enter edit mode if there's an error
     } finally {
@@ -557,7 +571,8 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Variation deleted successfully",
-          className: "bg-green-500",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         })
         // Refresh the page after successful deletion
         window.location.reload()
@@ -618,6 +633,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Please select a material and enter a valid amount.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -639,7 +656,8 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Material added to variation successfully. Refreshing page...",
-          className: "bg-green-500",
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,
         })
         // Reload the page after a short delay
         setTimeout(() => {
@@ -654,6 +672,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Failed to add material to variation. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setIsAddingMaterial(false)
@@ -670,6 +690,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Please enter a valid amount greater than 0.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
       return
     }
@@ -701,14 +723,17 @@ export default function ProductDetailPage() {
       toast({
         title: "Success",
         description: "Material amount updated successfully",
-        className: "bg-green-500",
-      })
+        className: "bg-green-500 text-black font-medium rounded-xl",
+        duration: 2000,
+        })
     } catch (error) {
       console.error('Error updating material amount:', error)
       toast({
         title: "Error",
         description: "Failed to update material amount. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     }
   }
@@ -731,8 +756,8 @@ export default function ProductDetailPage() {
         toast({
           title: "Success",
           description: "Material deleted successfully",
-          className: "bg-green-500",
-        })
+          className: "bg-green-500 text-black font-medium rounded-xl",
+          duration: 2000,        })
         // Refresh the page after successful deletion
         window.location.reload()
       } else {
@@ -744,6 +769,8 @@ export default function ProductDetailPage() {
         title: "Error",
         description: "Failed to delete material. Please try again.",
         variant: "destructive",
+        className: "bg-red-500 text-black font-medium rounded-xl",
+        duration: 2000,
       })
     } finally {
       setDeletingMaterial(null)
