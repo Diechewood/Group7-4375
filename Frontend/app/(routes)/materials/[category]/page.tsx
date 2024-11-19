@@ -783,7 +783,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                   ${index % 2 === 0 ? 'bg-white' : 'bg-[#F3F0FF]'}
                                   ${isSelected ? 'bg-[#4A447C]/10' : ''}
                                   ${isPopup ? 'cursor-pointer hover:bg-[#4A447C]/5' : ''}
-                                  ${searchTerm !== '' ? 'bg-purple-700' : ''}
+                                  ${searchTerm !== '' ? 'bg-[#fef9c3]' : ''}
                                 `}
                                 onClick={() => {
                                   if (isPopup && onSelectMaterial) {
