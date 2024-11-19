@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, Fragment, useMemo } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, ArrowUpDown, AlertCircle, ChevronDown, ChevronRight, X, Check, Pencil, Trash2, Plus } from 'lucide-react'
@@ -123,7 +123,6 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
     setIsLoading(true)
     setError(null)
     try {
-      // Fetch materials and brands for this specific category
       const [materialsRes, brandsRes] = await Promise.all([
         fetch(`http://localhost:5000/api/materials?category=${encodeURIComponent(category)}`, { signal }),
         fetch(`http://localhost:5000/api/materialbrands?mc_id=${categoryId}`, { signal })
@@ -172,32 +171,38 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
     }
   }, [fetchData, retryCount])
 
-  const filteredBrands = brands.filter(brand => 
-    searchTerm === '' || 
-    brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    materials.some(m => 
-      m.brand_id === brand.brand_id && (
-        m.mat_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.mat_sku.toLowerCase().includes(searchTerm.toLowerCase())
+  const groupedMaterials = useMemo(() => {
+    return materials.reduce((acc: GroupedMaterials, material) => {
+      if (!acc[material.brand_id]) {
+        acc[material.brand_id] = []
+      }
+      acc[material.brand_id].push(material)
+      return acc
+    }, {})
+  }, [materials])
+
+  const filteredBrands = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.toLowerCase()
+    return brands.filter(brand => {
+      const brandMatch = brand.brand_name?.toLowerCase().includes(normalizedSearchTerm) ?? false
+      const materialsForBrand = groupedMaterials[brand.brand_id] || []
+      const materialMatch = materialsForBrand.some(material => 
+        (material.mat_name?.toLowerCase().includes(normalizedSearchTerm) ?? false) ||
+        (material.mat_sku?.toLowerCase().includes(normalizedSearchTerm) ?? false)
       )
-    )
-  )
-
-  const groupedMaterials = materials.reduce((acc: GroupedMaterials, material) => {
-    if (!acc[material.brand_id]) {
-      acc[material.brand_id] = []
-    }
-    acc[material.brand_id].push(material)
-    return acc
-  }, {})
-
-  const sortedBrandIds = filteredBrands
-    .sort((a, b) => {
-      return sortDirection === 'asc' 
-        ? a.brand_name.localeCompare(b.brand_name) 
-        : b.brand_name.localeCompare(a.brand_name)
+      return searchTerm === '' || brandMatch || materialMatch
     })
-    .map(brand => brand.brand_id)
+  }, [brands, groupedMaterials, searchTerm])
+
+  const sortedBrandIds = useMemo(() => {
+    return filteredBrands
+      .sort((a, b) => {
+        return sortDirection === 'asc' 
+          ? (a.brand_name ?? '').localeCompare(b.brand_name ?? '') 
+          : (b.brand_name ?? '').localeCompare(a.brand_name ?? '')
+      })
+      .map(brand => brand.brand_id)
+  }, [filteredBrands, sortDirection])
 
   const toggleBrand = (brandId: number) => {
     setExpandedBrands(prev => {
@@ -765,6 +770,11 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                           materialsForBrand.map((material, index) => {
                             const editedMaterial = editedMaterials[material.mat_id] || material
                             const isSelected = selectedMaterialId === material.mat_id
+                            const isMatched = searchTerm === '' || (
+                              (material.mat_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+                              (material.mat_sku?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+                            )
+                            if (!isMatched) return null
                             return (
                               <tr 
                                 key={material.mat_id} 
@@ -773,6 +783,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                   ${index % 2 === 0 ? 'bg-white' : 'bg-[#F3F0FF]'}
                                   ${isSelected ? 'bg-[#4A447C]/10' : ''}
                                   ${isPopup ? 'cursor-pointer hover:bg-[#4A447C]/5' : ''}
+                                  ${searchTerm !== '' ? 'bg-purple-700' : ''}
                                 `}
                                 onClick={() => {
                                   if (isPopup && onSelectMaterial) {
@@ -807,7 +818,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                   {isEditMode ? (
                                     <Input
                                       type="number"
-                                      value={editedMaterials[material.mat_id]?.mat_inv || material.mat_inv}
+                                      value={editedMaterial.mat_inv}
                                       onChange={(e) => handleMaterialEdit(material.mat_id, 'mat_inv', parseFloat(e.target.value))}
                                       className="w-full max-w-[100px] text-gray-800"
                                     />
@@ -899,11 +910,9 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this {deleteTarget?.type}?</AlertDialogTitle>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget?.type === 'brand' 
-                ? "This action will delete the brand and all associated materials. This action cannot be undone."
-                : "This action cannot be undone."}
+              This action cannot be undone. This will permanently delete the {deleteTarget?.type} "{deleteTarget?.name}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -914,141 +923,105 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
       </AlertDialog>
 
       <Dialog open={isAddingBrand} onOpenChange={setIsAddingBrand}>
-        <DialogContent className="bg-white border border-[#4A447C]/20 p-6">
-          <DialogHeader className="text-[#4A447C] text-xl font-semibold">
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle>Add New Brand</DialogTitle>
             <DialogDescription>
-              Create a new brand for {category}
+              Enter the details for the new brand.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="brand_name" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]" >Brand Name</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="brand_name" className="text-right">
+                Brand Name
+              </Label>
               <Input
                 id="brand_name"
                 value={newBrandData.brand_name}
-                onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_name: e.target.value }))}
-                placeholder="Enter brand name"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewBrandData({ ...newBrandData, brand_name: e.target.value })}
+                className="col-span-3"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="brand_price" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Price</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="brand_price" className="text-right">
+                Brand Price
+              </Label>
               <Input
                 id="brand_price"
                 type="number"
-                step="0.01"
                 value={newBrandData.brand_price}
-                onChange={(e) => setNewBrandData(prev => ({ ...prev, brand_price: e.target.value }))}
-                placeholder="Enter price"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewBrandData({ ...newBrandData, brand_price: e.target.value })}
+                className="col-span-3"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsAddingBrand(false)}
-              disabled={isSubmitting}
-              className="border-[#4A447C] text-black"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddBrand}
-              disabled={isSubmitting}
-              className="bg-[#4A447C]"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Creating...
-                </>
-              ) : (
-                'Create Brand'
-              )}
+            <Button type="submit" onClick={handleAddBrand} disabled={isSubmitting}>
+              {isSubmitting ? 'Adding...' : 'Add Brand'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
-        <DialogContent className="bg-white border-b-2 border-[#4A447C] p-6">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#4A447C] text-xl font-semibold">Add New Material</DialogTitle>
+            <DialogTitle>Add New Material</DialogTitle>
             <DialogDescription>
-              Create a new material for {brands.find(b => b.brand_id === selectedBrandId)?.brand_name}
+              Enter the details for the new material.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="mat_name" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Material Name</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="mat_name" className="text-right">
+                Material Name
+              </Label>
               <Input
                 id="mat_name"
                 value={newMaterialData.mat_name}
-                onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_name: e.target.value }))}
-                placeholder="Enter material name"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewMaterialData({ ...newMaterialData, mat_name: e.target.value })}
+                className="col-span-3"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mat_sku" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">SKU</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="mat_sku" className="text-right">
+                SKU
+              </Label>
               <Input
                 id="mat_sku"
                 value={newMaterialData.mat_sku}
-                onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_sku: e.target.value }))}
-                placeholder="Enter SKU"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewMaterialData({ ...newMaterialData, mat_sku: e.target.value })}
+                className="col-span-3"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mat_inv" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Initial Inventory</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="mat_inv" className="text-right">
+                Inventory
+              </Label>
               <Input
                 id="mat_inv"
                 type="number"
                 value={newMaterialData.mat_inv}
-                onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_inv: e.target.value }))}
-                placeholder="Enter initial inventory"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewMaterialData({ ...newMaterialData, mat_inv: e.target.value })}
+                className="col-span-3"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mat_alert" className="col-span-3 border-[#4A447C]/20 text-[#4A447C] focus:border-[#4A447C] focus:ring-[#4A447C]">Alert Threshold</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="mat_alert" className="text-right">
+                Alert Threshold
+              </Label>
               <Input
                 id="mat_alert"
                 type="number"
                 value={newMaterialData.mat_alert}
-                onChange={(e) => setNewMaterialData(prev => ({ ...prev, mat_alert: e.target.value }))}
-                placeholder="Enter alert threshold"
-                className="col-span-3 border-[#4A447C] text-black"
+                onChange={(e) => setNewMaterialData({ ...newMaterialData, mat_alert: e.target.value })}
+                className="col-span-3"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              className="border-[#4A447C] text-[#4A447C]"
-              onClick={() => {
-                setIsAddingMaterial(false)
-                setSelectedBrandId(null)
-              }}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddMaterial}
-              disabled={isSubmitting}
-              className="bg-[#4A447C]"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Creating...
-                </>
-              ) : (
-                'Create Material'
-              )}
+            <Button type="submit" onClick={handleAddMaterial} disabled={isSubmitting}>
+              {isSubmitting ? 'Adding...' : 'Add Material'}
             </Button>
           </DialogFooter>
         </DialogContent>

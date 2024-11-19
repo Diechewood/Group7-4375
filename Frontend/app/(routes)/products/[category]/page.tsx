@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, Fragment, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -159,17 +159,27 @@ export default function ProductsCategoryPage() {
     }
   }, [fetchData, retryCount])
 
-  const filteredProducts = products.filter(product =>
-    product.prod_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const groupedVariations = useMemo(() => {
+    return variations.reduce((acc: GroupedVariations, variation) => {
+      if (!acc[variation.prod_id]) {
+        acc[variation.prod_id] = []
+      }
+      acc[variation.prod_id].push(variation)
+      return acc
+    }, {})
+  }, [variations])
 
-  const groupedVariations = variations.reduce((acc: GroupedVariations, variation) => {
-    if (!acc[variation.prod_id]) {
-      acc[variation.prod_id] = []
-    }
-    acc[variation.prod_id].push(variation)
-    return acc
-  }, {})
+  const filteredProducts = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.toLowerCase()
+    return products.filter(product => {
+      const productMatch = product.prod_name.toLowerCase().includes(normalizedSearchTerm)
+      const variationsForProduct = groupedVariations[product.prod_id] || []
+      const variationMatch = variationsForProduct.some(variation =>
+        variation.var_name.toLowerCase().includes(normalizedSearchTerm)
+      )
+      return productMatch || variationMatch
+    })
+  }, [products, groupedVariations, searchTerm])
 
   const toggleProduct = (productId: number) => {
     setExpandedProducts(prev => {
@@ -183,11 +193,13 @@ export default function ProductsCategoryPage() {
     })
   }
 
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    return sortDirection === 'asc'
-      ? a.prod_name.localeCompare(b.prod_name)
-      : b.prod_name.localeCompare(a.prod_name)
-  })
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      return sortDirection === 'asc'
+        ? a.prod_name.localeCompare(b.prod_name)
+        : b.prod_name.localeCompare(a.prod_name)
+    })
+  }, [filteredProducts, sortDirection])
 
   const handleEditInventory = (variationId: number, currentInventory: number, currentGoal: number) => {
     setEditingInventory(prev => ({ 
@@ -396,7 +408,6 @@ export default function ProductsCategoryPage() {
       setIsLoading(false);
     }
   };
-
   const handleProductEdit = (productId: number, field: keyof Product, value: string | number) => {
     setEditedProducts(prev => ({
       ...prev,
@@ -618,7 +629,7 @@ export default function ProductsCategoryPage() {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>No Results</AlertTitle>
-          <AlertDescription>No products match your search criteria. Try adjusting your search term.</AlertDescription>
+          <AlertDescription>No products or variations match your search criteria. Try adjusting your search term.</AlertDescription>
         </Alert>
       ) : (
         <div className="bg-[#4A447C] rounded-lg shadow overflow-x-auto flex-1 border border-[#4A447C]/20">
@@ -643,11 +654,12 @@ export default function ProductsCategoryPage() {
                 const hasMultipleVariations = productVariations.length > 1
                 const singleVariation = !hasMultipleVariations && productVariations[0]
                 const editedProduct = editedProducts[product.prod_id] || product
+                const shouldHighlight = searchTerm && product.prod_name.toLowerCase().includes(searchTerm.toLowerCase())
 
                 return (
                   <Fragment key={product.prod_id}>
                     <tr 
-                      className={`border-b border-[#4A447C]/20 ${hasMultipleVariations ? 'bg-[#E5D5FF] hover:bg-[#E5D5FF]/80' : 'bg-white hover:bg-gray-50'}`}
+                      className={`border-b border-[#4A447C]/20 ${hasMultipleVariations ? 'bg-[#E5D5FF] hover:bg-[#E5D5FF]/80' : 'bg-white hover:bg-gray-50'} ${shouldHighlight ? 'bg-yellow-100' : ''}`}
                     >
                       <td className="p-3 text-[#4A447C]">
                         <div className="flex items-center">
@@ -717,7 +729,7 @@ export default function ProductsCategoryPage() {
                         {isEditMode && singleVariation ? (
                           <Input
                             type="number"
-                            value={editedVariations[singleVariation.var_id]?.var_inv || singleVariation.var_inv}
+                            value={editedVariations[singleVariation.var_id]?.var_inv ?? singleVariation.var_inv}
                             onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_inv', parseInt(e.target.value))}
                             className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
@@ -729,7 +741,7 @@ export default function ProductsCategoryPage() {
                         {isEditMode && singleVariation ? (
                           <Input
                             type="number"
-                            value={editedVariations[singleVariation.var_id]?.var_goal || singleVariation.var_goal}
+                            value={editedVariations[singleVariation.var_id]?.var_goal ?? singleVariation.var_goal}
                             onChange={(e) => handleVariationEdit(singleVariation.var_id, 'var_goal', parseInt(e.target.value))}
                             className="w-20 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
@@ -737,49 +749,47 @@ export default function ProductsCategoryPage() {
                           totalGoal
                         )}
                       </td>
-                      <td className="p-3 text-[#4A447C] text-right">
+                      <td className="p-3 text-right text-[#4A447C]">
                         {isEditMode ? (
                           <Input
                             type="number"
                             value={editedProduct.prod_cost}
                             onChange={(e) => handleProductEdit(product.prod_id, 'prod_cost', parseFloat(e.target.value))}
-                            className="w-24 ml-auto bg-white text-[#4A447C] border-[#4A447C]/20"
+                            className="w-24 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           formatCurrency(product.prod_cost)
                         )}
                       </td>
-                      <td className="p-3 text-[#4A447C] text-right">
+                      <td className="p-3 text-right text-[#4A447C]">
                         {isEditMode ? (
                           <Input
                             type="number"
                             value={editedProduct.prod_msrp}
                             onChange={(e) => handleProductEdit(product.prod_id, 'prod_msrp', parseFloat(e.target.value))}
-                            className="w-24 ml-auto bg-white text-[#4A447C] border-[#4A447C]/20"
+                            className="w-24 bg-white text-[#4A447C] border-[#4A447C]/20"
                           />
                         ) : (
                           formatCurrency(product.prod_msrp)
                         )}
                       </td>
-                      <td className="p-3 text-[#4A447C] text-right">
+                      <td className="p-3 text-right">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteProduct(product)
-                          }}
+                          onClick={() => handleDeleteProduct(product)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-100"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </td>
                     </tr>
-                    {hasMultipleVariations && isExpanded && productVariations.map((variation) => {
+                    {(hasMultipleVariations && isExpanded) && productVariations.map((variation) => {
                       const editedVariation = editedVariations[variation.var_id] || variation
+                      const shouldHighlightVariation = searchTerm && variation.var_name.toLowerCase().includes(searchTerm.toLowerCase())
                       return (
-                        <tr key={variation.var_id} className="border-b border-[#4A447C]/10 last:border-b-0 bg-white hover:bg-gray-50">
-                          <td className="p-3 pl-8 text-[#4A447C]">
+                        <tr key={variation.var_id} className={`border-b border-[#4A447C]/10 last:border-b-0 bg-white hover:bg-gray-50 ${shouldHighlightVariation ? 'bg-yellow-100' : ''}`}>
+                          <td className="p-3 pl-10 text-[#4A447C]">
                             {isEditMode ? (
                               <Input
                                 value={editedVariation.var_name}
@@ -844,9 +854,9 @@ export default function ProductsCategoryPage() {
                               variation.var_goal
                             )}
                           </td>
-                          <td className="p-3 text-[#4A447C] text-right">-</td>
-                          <td className="p-3 text-[#4A447C] text-right">-</td>
-                          <td className="p-3 text-[#4A447C] text-right">-</td>
+                          <td className="p-3 text-right text-[#4A447C]"></td>
+                          <td className="p-3 text-right text-[#4A447C]"></td>
+                          <td className="p-3 text-right text-[#4A447C]"></td>
                         </tr>
                       )
                     })}
