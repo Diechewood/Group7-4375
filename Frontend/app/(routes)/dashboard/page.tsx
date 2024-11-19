@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, Plus, CalendarIcon, Edit, Trash, Loader2 } from 'lucide-react'
+import { AlertCircle, Plus, CalendarIcon, Edit, Trash, Loader2, Settings, Check, X, ChevronDown } from 'lucide-react'
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -15,6 +15,12 @@ import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { format } from "date-fns"
 import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+import { Toaster } from "@/components/ui/toaster"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface ProductVariation {
   var_id: number
@@ -56,6 +62,7 @@ interface CalendarEvent {
 }
 
 export default function DashboardPage() {
+  const { toast } = useToast()
   const [productAlerts, setProductAlerts] = useState<(ProductVariation & Partial<Product>)[]>([])
   const [materialAlerts, setMaterialAlerts] = useState<Material[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -63,14 +70,29 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [isAddingEvent, setIsAddingEvent] = useState(false)
   const [isEditingEvent, setIsEditingEvent] = useState(false)
-  const [isAddingCategory, setIsAddingCategory] = useState(false)
-  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({ event_title: '', event_timestamp: new Date().toISOString() })
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
+  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({ 
+    event_title: '', 
+    event_timestamp: new Date().toISOString(),
+    event_subtitle: '',
+    event_notes: '',
+    event_link: ''
+  })
   const [newCategory, setNewCategory] = useState<Partial<CalendarCategory>>({ cc_name: '', cc_hex: '#000000' })
   const [editingEventId, setEditingEventId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [categoryToDelete, setCategoryToDelete] = useState<CalendarCategory | null>(null)
-  const [showDeleteWarning, setShowDeleteWarning] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [showEventDetails, setShowEventDetails] = useState(false)
+  const [filterCategory, setFilterCategory] = useState<number | 'all'>('all')
+  const [filterDateRange, setFilterDateRange] = useState<{ start: Date | null, end: Date | null }>({ start: null, end: null })
+  const [hoveredDate, setHoveredDate] = useState<Date | null>(null)
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false)
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false)
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null)
+  const [editedCategoryName, setEditedCategoryName] = useState('')
+  const [selectedProductCategories, setSelectedProductCategories] = useState<string[]>([])
+  const [selectedMaterialCategories, setSelectedMaterialCategories] = useState<string[]>([])
 
   useEffect(() => {
     fetchData()
@@ -108,14 +130,29 @@ export default function DashboardPage() {
       setMaterialAlerts(materialData.filter((item: Material) => item.mat_inv < item.mat_alert))
       setCategories(categoriesData)
       setEvents(eventsData)
+      
     } catch (error) {
       console.error('Error fetching data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch data. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsRefreshing(false)
     }
   }
 
   const handleAddEvent = async () => {
+    if (!newEvent.event_title || !newEvent.cc_id || !newEvent.event_timestamp) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields (Title, Category, and Date).",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
       const response = await fetch('http://localhost:5000/api/calendarevents', {
@@ -129,41 +166,58 @@ export default function DashboardPage() {
       if (response.status === 201) {
         await fetchData()
         setIsAddingEvent(false)
-        setNewEvent({ event_title: '', event_timestamp: new Date().toISOString() })
+        setNewEvent({ 
+          event_title: '', 
+          event_timestamp: new Date().toISOString(),
+          event_subtitle: '',
+          event_notes: '',
+          event_link: ''
+        })
+        toast({
+          title: "Success",
+          description: "Event added successfully",
+        })
       } else {
-        console.error('Failed to add event')
+        throw new Error('Failed to add event')
       }
     } catch (error) {
       console.error('Error adding event:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add event. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleDeleteCategory = async (category: CalendarCategory) => {
-    setCategoryToDelete(category)
-    setShowDeleteWarning(true)
-  }
-
-  const confirmDeleteCategory = async () => {
-    if (!categoryToDelete) return
-    setIsLoading(true)
+    setIsDeletingCategory(true)
     try {
-      const response = await fetch(`http://localhost:5000/api/calendarcategories/${categoryToDelete.cc_id}`, {
+      const response = await fetch(`http://localhost:5000/api/calendarcategories/${category.cc_id}`, {
         method: 'DELETE',
       })
 
       if (response.ok) {
         await fetchData()
-        setShowDeleteWarning(false)
-        setCategoryToDelete(null)
+        setIsManagingCategories(false)
+        toast({
+          title: "Success",
+          description: "Category deleted successfully",
+        })
       } else {
-        console.error('Failed to delete category')
+        throw new Error('Failed to delete category')
       }
     } catch (error) {
       console.error('Error deleting category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete category. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false)
+      setIsDeletingCategory(false)
     }
   }
 
@@ -182,19 +236,35 @@ export default function DashboardPage() {
       if (response.ok) {
         await fetchData()
         setIsEditingEvent(false)
-        setNewEvent({ event_title: '', event_timestamp: new Date().toISOString() })
+        setNewEvent({ 
+          event_title: '', 
+          event_timestamp: new Date().toISOString(),
+          event_subtitle: '',
+          event_notes: '',
+          event_link: ''
+        })
         setEditingEventId(null)
+        toast({
+          title: "Success",
+          description: "Event updated successfully",
+        })
       } else {
-        console.error('Failed to update event')
+        throw new Error('Failed to update event')
       }
     } catch (error) {
       console.error('Error updating event:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update event. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleDeleteEvent = async (eventId: number) => {
+    setIsDeletingEvent(true)
     try {
       const response = await fetch(`http://localhost:5000/api/calendarevents/${eventId}`, {
         method: 'DELETE',
@@ -202,11 +272,23 @@ export default function DashboardPage() {
 
       if (response.ok) {
         await fetchData()
+        setShowEventDetails(false)
+        toast({
+          title: "Success",
+          description: "Event deleted successfully",
+        })
       } else {
-        console.error('Failed to delete event')
+        throw new Error('Failed to delete event')
       }
     } catch (error) {
       console.error('Error deleting event:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete event. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeletingEvent(false)
     }
   }
 
@@ -223,13 +305,53 @@ export default function DashboardPage() {
 
       if (response.status === 201) {
         await fetchData()
-        setIsAddingCategory(false)
         setNewCategory({ cc_name: '', cc_hex: '#000000' })
+        toast({
+          title: "Success",
+          description: "Category added successfully",
+        })
       } else {
-        console.error('Failed to add category')
+        throw new Error('Failed to add category')
       }
     } catch (error) {
       console.error('Error adding category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add category. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleEditCategory = async (categoryId: number, updatedCategory: Partial<CalendarCategory>) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`http://localhost:5000/api/calendarcategories/${categoryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedCategory),
+      })
+
+      if (response.ok) {
+        await fetchData()
+        toast({
+          title: "Success",
+          description: "Category updated successfully",
+        })
+      } else {
+        throw new Error('Failed to update category')
+      }
+    } catch (error) {
+      console.error('Error updating category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update category. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -252,6 +374,67 @@ export default function DashboardPage() {
     return format(new Date(date), 'PPP')
   }
 
+  const filteredEvents = events.filter(event => {
+    const eventDate = new Date(event.event_timestamp)
+    const categoryMatch = filterCategory === 'all' || event.cc_id === filterCategory
+    const dateMatch = 
+      (!filterDateRange.start || eventDate >= filterDateRange.start) &&
+      (!filterDateRange.end || eventDate <= filterDateRange.end)
+    return categoryMatch && dateMatch
+  })
+
+  const getContrastColor = (hexcolor: string) => {
+    const r = parseInt(hexcolor.slice(1,3), 16)
+    const g = parseInt(hexcolor.slice(3,5), 16)
+    const b = parseInt(hexcolor.slice(5,7), 16)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return luminance > 0.5 ? '#000000' : '#ffffff'
+  }
+
+  const handleEditCategoryStart = (category: CalendarCategory) => {
+    setEditingCategoryId(category.cc_id)
+    setEditedCategoryName(category.cc_name)
+  }
+
+  const handleEditCategoryCancel = () => {
+    setEditingCategoryId(null)
+    setEditedCategoryName('')
+  }
+
+  const handleEditCategoryConfirm = async (categoryId: number) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`http://localhost:5000/api/calendarcategories/${categoryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cc_name: editedCategoryName }),
+      })
+
+      if (response.ok) {
+        await fetchData()
+        setEditingCategoryId(null)
+        setEditedCategoryName('')
+        toast({
+          title: "Success",
+          description: "Category updated successfully",
+        })
+      } else {
+        throw new Error('Failed to update category')
+      }
+    } catch (error) {
+      console.error('Error updating category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update category. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-black text-3xl font-bold mb-6">Dashboard</h1>
@@ -261,9 +444,9 @@ export default function DashboardPage() {
           <CardTitle className="flex justify-between items-center">
             Calendar
             <div>
-              <Button onClick={() => setIsAddingCategory(true)} size="sm" className="mr-2 bg-[#4A4A7C]">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Category
+              <Button onClick={() => setIsManagingCategories(true)} size="sm" className="mr-2 bg-[#4A4A7C]">
+                <Settings className="h-4 w-4 mr-2" />
+                Manage Categories
               </Button>
               <Button onClick={() => setIsAddingEvent(true)} size="sm" className="bg-[#4A4A7C]">
                 <Plus className="h-4 w-4 mr-2" />
@@ -294,6 +477,7 @@ export default function DashboardPage() {
                       const dateEvents = getEventsForDate(date)
                       const hasEvent = dateEvents.length > 0
                       const isOutsideMonth = date.getMonth() !== displayMonth.getMonth()
+                      const isHovered = hoveredDate?.toDateString() === date.toDateString()
                       return (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -303,11 +487,12 @@ export default function DashboardPage() {
                                 "w-8 h-8 p-0 font-normal aria-selected:opacity-100 rounded-md transition-colors",
                                 hasEvent && "text-white hover:opacity-80",
                                 !hasEvent && "hover:bg-gray-100",
-                                isOutsideMonth && "text-muted-foreground opacity-50"
+                                isOutsideMonth && "text-muted-foreground opacity-50",
+                                isHovered && "bg-blue-200"
                               )}
                               style={hasEvent ? { 
                                 backgroundColor: dateEvents[0].cc_hex,
-                                opacity: 0.8
+                                opacity: isHovered ? 1 : 0.8
                               } : {}}
                               onClick={(e) => {
                                 e.preventDefault()
@@ -315,6 +500,8 @@ export default function DashboardPage() {
                                   handleDayClick(date)
                                 }
                               }}
+                              onMouseEnter={() => setHoveredDate(date)}
+                              onMouseLeave={() => setHoveredDate(null)}
                             >
                               {date.getDate()}
                             </button>
@@ -322,12 +509,10 @@ export default function DashboardPage() {
                           {hasEvent && !isOutsideMonth && (
                             <TooltipContent className="bg-[#4A4A7C] border-none text-white">
                               {dateEvents.map((event, index) => (
-                                <div key={index} className="flex items-center gap-2">
-                                  <div 
-                                    className="w-2 h-2 rounded-full" 
-                                    style={{ backgroundColor: event.cc_hex }}
-                                  />
-                                  {event.event_title}
+                                <div key={index} className="flex flex-col gap-1 mb-2">
+                                  <div className="font-semibold">{event.event_title}</div>
+                                  <div className="text-sm">{event.event_subtitle}</div>
+                                  <div className="text-xs">{format(new Date(event.event_timestamp), 'p')}</div>
                                 </div>
                               ))}
                             </TooltipContent>
@@ -341,29 +526,53 @@ export default function DashboardPage() {
             </div>
 
             <div className="bg-[#E5D5FF] p-4 rounded-lg">
+              <div className="mb-4 flex space-x-2">
+                <Select value={filterCategory.toString()} onValueChange={(value) => setFilterCategory(value === 'all' ? 'all' : parseInt(value))}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.cc_id} value={category.cc_id.toString()}>{category.cc_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  onChange={(e) => setFilterDateRange(prev => ({ ...prev, start: e.target.value ? new Date(e.target.value) : null }))}
+                  className="w-[150px]"
+                  placeholder="Start Date"
+                />
+                <Input
+                  type="date"
+                  onChange={(e) => setFilterDateRange(prev => ({ ...prev, end: e.target.value ? new Date(e.target.value) : null }))}
+                  className="w-[150px]"
+                  placeholder="End Date"
+                />
+              </div>
               <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
-                  {events.length > 0 ? (
-                    events.map((event) => (
-                      <div key={event.event_id} className="bg-white p-3 rounded-lg shadow flex justify-between items-start">
+                  {filteredEvents.length > 0 ? (
+                    filteredEvents.map((event) => (
+                      <div 
+                        key={event.event_id} 
+                        className="p-3 rounded-lg shadow flex justify-between items-start cursor-pointer"
+                        style={{
+                          backgroundColor: event.cc_hex,
+                          color: getContrastColor(event.cc_hex)
+                        }}
+                        onClick={() => {
+                          setSelectedEvent(event)
+                          setShowEventDetails(true)
+                        }}
+                      >
                         <div>
-                          <div className="font-medium" style={{ color: event.cc_hex }}>{event.event_title}</div>
-                          <div className="text-xs text-muted-foreground mb-1">{event.cc_name}</div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="font-medium">{event.event_title}</div>
+                          <div className="text-xs opacity-80 mb-1">{event.event_subtitle || event.cc_name}</div>
+                          <div className="text-sm opacity-80">
                             {formatDate(event.event_timestamp)}
                           </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="hover:bg-[#E5D5FF]" onClick={() => {
-                            setNewEvent(event)
-                            setEditingEventId(event.event_id)
-                            setIsEditingEvent(true)
-                          }}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="hover:bg-[#E5D5FF]" onClick={() => handleDeleteEvent(event.event_id)}>
-                            <Trash className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     ))
@@ -376,17 +585,76 @@ export default function DashboardPage() {
               </ScrollArea>
             </div>
           </div>
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold mb-2">Category Legend</h4>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <Badge 
+                  key={category.cc_id} 
+                  style={{ backgroundColor: category.cc_hex, color: getContrastColor(category.cc_hex) }}
+                >
+                  {category.cc_name}
+                </Badge>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="col-span-1 bg-[#4A4A7C] border-black border-lg">
           <CardHeader>
-            <CardTitle className="text-white">Product Variation Alerts</CardTitle>
+            <CardTitle className="text-white flex justify-between items-center">
+              Product Variation Alerts
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Filter <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium leading-none">Product Categories</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Select the categories you want to see alerts for.
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {Array.from(new Set(productAlerts.map(item => item.pc_name))).map((category) => (
+                        <div key={category} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`product-${category}`} 
+                            checked={category ? selectedProductCategories.includes(category) : false}
+                            onCheckedChange={(checked) => {
+                              if (category) {
+                                setSelectedProductCategories(prev => 
+                                  checked 
+                                    ? [...prev, category] 
+                                    : prev.filter(c => c !== category)
+                                )
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`product-${category}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {category}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[calc(100vh-250px)]">
-              {productAlerts.map((item) => (
+              {productAlerts
+                .filter(item => selectedProductCategories.length === 0 || (item.pc_name && selectedProductCategories.includes(item.pc_name)))
+                .map((item) => (
                 <Alert key={item.var_id} variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Low Inventory</AlertTitle>
@@ -405,11 +673,57 @@ export default function DashboardPage() {
         </Card>
         <Card className="col-span-1 bg-[#4A4A7C] border-black border-lg">
           <CardHeader>
-            <CardTitle className="text-white">Material Alerts</CardTitle>
+            <CardTitle className="text-white flex justify-between items-center">
+              Material Alerts
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Filter <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium leading-none">Material Categories</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Select the categories you want to see alerts for.
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {Array.from(new Set(materialAlerts.map(item => item.mc_name))).map((category) => (
+                        <div key={category} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`material-${category}`} 
+                            checked={category ? selectedMaterialCategories.includes(category) : false}
+                            onCheckedChange={(checked) => {
+                              if (category) {
+                                setSelectedMaterialCategories(prev => 
+                                  checked 
+                                    ? [...prev, category] 
+                                    : prev.filter(c => c !== category)
+                                )
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`material-${category}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {category}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[calc(100vh-250px)]">
-              {materialAlerts.map((item) => (
+              {materialAlerts
+                .filter(item => selectedMaterialCategories.length === 0 || selectedMaterialCategories.includes(item.mc_name))
+                .map((item) => (
                 <Alert key={item.mat_name} variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Low Inventory</AlertTitle>
@@ -431,7 +745,13 @@ export default function DashboardPage() {
         if (!open) {
           setIsAddingEvent(false)
           setIsEditingEvent(false)
-          setNewEvent({ event_title: '', event_timestamp: new Date().toISOString() })
+          setNewEvent({ 
+            event_title: '', 
+            event_timestamp: new Date().toISOString(),
+            event_subtitle: '',
+            event_notes: '',
+            event_link: ''
+          })
           setEditingEventId(null)
         }
       }}>
@@ -442,22 +762,35 @@ export default function DashboardPage() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="event-title" className="text-right">
-                Title
+                Title*
               </Label>
               <Input
                 id="event-title"
                 value={newEvent.event_title}
                 onChange={(e) => setNewEvent({ ...newEvent, event_title: e.target.value })}
                 className="col-span-3 bg-white/10 border-white/20 text-white"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="event-subtitle" className="text-right">
+                Subtitle
+              </Label>
+              <Input
+                id="event-subtitle"
+                value={newEvent.event_subtitle}
+                onChange={(e) => setNewEvent({ ...newEvent, event_subtitle: e.target.value })}
+                className="col-span-3 bg-white/10 border-white/20 text-white"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="event-category" className="text-right">
-                Category
+                Category*
               </Label>
               <Select
                 value={newEvent.cc_id?.toString()}
                 onValueChange={(value) => setNewEvent({ ...newEvent, cc_id: parseInt(value) })}
+                required
               >
                 <SelectTrigger className="col-span-3 bg-white/10 border-white/20 text-white">
                   <SelectValue placeholder="Select a category" />
@@ -477,13 +810,36 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="event-date" className="text-right">
-                Date
+                Date*
               </Label>
               <Input
                 id="event-date"
                 type="datetime-local"
                 value={newEvent.event_timestamp?.slice(0, 16)}
                 onChange={(e) => setNewEvent({ ...newEvent, event_timestamp: new Date(e.target.value).toISOString() })}
+                className="col-span-3 bg-white/10 border-white/20 text-white"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="event-notes" className="text-right">
+                Notes
+              </Label>
+              <Textarea
+                id="event-notes"
+                value={newEvent.event_notes}
+                onChange={(e) => setNewEvent({ ...newEvent, event_notes: e.target.value })}
+                className="col-span-3 bg-white/10 border-white/20 text-white"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="event-link" className="text-right">
+                Link
+              </Label>
+              <Input
+                id="event-link"
+                value={newEvent.event_link}
+                onChange={(e) => setNewEvent({ ...newEvent, event_link: e.target.value })}
                 className="col-span-3 bg-white/10 border-white/20 text-white"
               />
             </div>
@@ -501,10 +857,10 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddingCategory} onOpenChange={setIsAddingCategory}>
+      <Dialog open={isManagingCategories} onOpenChange={setIsManagingCategories}>
         <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
           <DialogHeader>
-            <DialogTitle>Categories</DialogTitle>
+            <DialogTitle>Manage Categories</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -519,7 +875,7 @@ export default function DashboardPage() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category-color" className="text-right">
+              <Label htmlFor="category-color"className="text-right">
                 Color
               </Label>
               <Input
@@ -530,6 +886,14 @@ export default function DashboardPage() {
                 className="col-span-3 bg-white/10 border-white/20 h-10"
               />
             </div>
+            <Button 
+              onClick={handleAddCategory}
+              disabled={isLoading}
+              className="bg-white text-[#4A4A7C] hover:bg-white/90"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Category
+            </Button>
             <Separator className="my-4" />
             <div className="space-y-4">
               <h4 className="text-sm font-medium">Existing Categories</h4>
@@ -541,62 +905,121 @@ export default function DashboardPage() {
                         className="w-4 h-4 rounded-full" 
                         style={{ backgroundColor: category.cc_hex }}
                       />
-                      <span>{category.cc_name}</span>
+                      {editingCategoryId === category.cc_id ? (
+                        <Input
+                          value={editedCategoryName}
+                          onChange={(e) => setEditedCategoryName(e.target.value)}
+                          className="bg-transparent border-none text-white"
+                        />
+                      ) : (
+                        <span>{category.cc_name}</span>
+                      )}
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      className="hover:bg-white/20"
-                      onClick={() => handleDeleteCategory(category)}
-                      disabled={isLoading}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="color"
+                        value={category.cc_hex}
+                        onChange={(e) => handleEditCategory(category.cc_id, { ...category, cc_hex: e.target.value })}
+                        className="w-8 h-8 p-0 border-none"
+                      />
+                      {editingCategoryId === category.cc_id ? (
+                        <>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="hover:bg-white/20"
+                            onClick={() => handleEditCategoryConfirm(category.cc_id)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="hover:bg-white/20"
+                            onClick={handleEditCategoryCancel}
+                            disabled={isLoading}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="hover:bg-white/20"
+                          onClick={() => handleEditCategoryStart(category)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="hover:bg-white/20"
+                        onClick={() => handleDeleteCategory(category)}
+                        disabled={isDeletingCategory || editingCategoryId === category.cc_id}
+                      >
+                        {isDeletingCategory ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button 
-              onClick={handleAddCategory}
-              disabled={isLoading}
-              className="bg-white text-[#4A4A7C] hover:bg-white/90"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Category
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDeleteWarning} onOpenChange={setShowDeleteWarning}>
+      <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
         <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
           <DialogHeader>
-            <DialogTitle>Warning</DialogTitle>
+            <DialogTitle>{selectedEvent?.event_title}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p>Deleting the category "{categoryToDelete?.cc_name}" will also delete all associated events. Are you sure you want to proceed?</p>
+            <p><strong>Subtitle:</strong> {selectedEvent?.event_subtitle}</p>
+            <p><strong>Category:</strong> {selectedEvent?.cc_name}</p>
+            <p><strong>Date:</strong> {selectedEvent && formatDate(selectedEvent.event_timestamp)}</p>
+            <p><strong>Notes:</strong> {selectedEvent?.event_notes}</p>
+            {selectedEvent?.event_link && (
+              <p><strong>Link:</strong> <a href={selectedEvent.event_link} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">{selectedEvent.event_link}</a></p>
+            )}
           </div>
           <DialogFooter>
             <Button
-              onClick={() => setShowDeleteWarning(false)}
-              variant="outline"
-              className="bg-white/10 text-white hover:bg-white/20"
+              onClick={() => {
+                setNewEvent(selectedEvent as CalendarEvent)
+                setEditingEventId(selectedEvent?.event_id || null)
+                setIsEditingEvent(true)
+                setShowEventDetails(false)
+              }}
+              className="bg-white text-[#4A4A7C] hover:bg-white/90 mr-2"
             >
-              Cancel
+              Edit
             </Button>
             <Button 
-              onClick={confirmDeleteCategory}
-              disabled={isLoading}
+              onClick={() => {
+                if (selectedEvent) handleDeleteEvent(selectedEvent.event_id)
+              }}
               className="bg-red-500 text-white hover:bg-red-600"
+              disabled={isDeletingEvent}
             >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isDeletingEvent ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash className="h-4 w-4 mr-2" />
+              )}
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Toaster />
     </div>
   )
 }
