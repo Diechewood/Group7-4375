@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { format } from "date-fns"
+import { format, parseISO, isValid } from "date-fns"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -143,6 +143,89 @@ export default function DashboardPage() {
     }
   }
 
+// Previous formatTime and formatDate functions
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString || dateString === '0000-00-00 00:00:00') return 'N/A'
+  try {
+    // First try parsing as ISO string
+    let date = new Date(dateString)
+    
+    // If invalid, try parsing as MySQL datetime format
+    if (!isValid(date)) {
+      const [datePart, timePart] = dateString.split(' ')
+      const [year, month, day] = datePart.split('-')
+      const [hour, minute, second] = timePart ? timePart.split(':') : ['00', '00', '00']
+      
+      date = new Date(
+        parseInt(year),
+        parseInt(month) - 1, // Months are 0-based in JavaScript
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute),
+        parseInt(second)
+      )
+    }
+    
+    if (!isValid(date)) return 'Invalid Date'
+    return format(date, 'PPP')
+  } catch (error) {
+    console.error('Error formatting date:', error, dateString)
+    return 'Invalid Date'
+  }
+}
+
+const formatTime = (dateString: string | null | undefined) => {
+  if (!dateString || dateString === '0000-00-00 00:00:00') return 'N/A'
+  try {
+    // First try parsing as ISO string
+    let date = new Date(dateString)
+    
+    // If invalid, try parsing as MySQL datetime format
+    if (!isValid(date)) {
+      const [datePart, timePart] = dateString.split(' ')
+      const [year, month, day] = datePart.split('-')
+      const [hour, minute, second] = timePart ? timePart.split(':') : ['00', '00', '00']
+      
+      date = new Date(
+        parseInt(year),
+        parseInt(month) - 1, // Months are 0-based in JavaScript
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute),
+        parseInt(second)
+      )
+    }
+    
+    if (!isValid(date)) return 'Invalid Time'
+    return format(date, 'h:mm a')
+  } catch (error) {
+    console.error('Error formatting time:', error, dateString)
+    return 'Invalid Time'
+  }
+}
+
+
+  const getEventsForDate = (date: Date) => {
+    return events.filter(event => {
+      const eventDate = new Date(event.event_timestamp)
+      return eventDate.toDateString() === date.toDateString()
+    })
+  }
+
+  const handleDayClick = (date: Date) => {
+    const newDate = new Date(date)
+    newDate.setHours(new Date().getHours(), new Date().getMinutes(), 0, 0)
+    setNewEvent({ ...newEvent, event_timestamp: newDate.toISOString() })
+    setIsAddingEvent(true)
+  }
+
+  const handleDateTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputDate = new Date(e.target.value)
+    if (isValid(inputDate)) {
+      setNewEvent({ ...newEvent, event_timestamp: inputDate.toISOString() })
+    }
+  }
+
   const handleAddEvent = async () => {
     if (!newEvent.event_title || !newEvent.cc_id || !newEvent.event_timestamp) {
       toast({
@@ -236,8 +319,8 @@ export default function DashboardPage() {
       if (response.ok) {
         await fetchData()
         setIsEditingEvent(false)
-        setNewEvent({ 
-          event_title: '', 
+        setNewEvent({
+          event_title: '',
           event_timestamp: new Date().toISOString(),
           event_subtitle: '',
           event_notes: '',
@@ -357,21 +440,12 @@ export default function DashboardPage() {
     }
   }
 
-  const getEventsForDate = (date: Date) => {
-    return events.filter(event => 
-      new Date(event.event_timestamp).toDateString() === date.toDateString()
-    )
-  }
-
-  const handleDayClick = (date: Date | undefined) => {
-    if (date) {
-      setNewEvent({ ...newEvent, event_timestamp: date.toISOString() })
-      setIsAddingEvent(true)
-    }
-  }
-
-  const formatDate = (date: string) => {
-    return format(new Date(date), 'PPP')
+  const getContrastColor = (hexcolor: string) => {
+    const r = parseInt(hexcolor.slice(1,3), 16)
+    const g = parseInt(hexcolor.slice(3,5), 16)
+    const b = parseInt(hexcolor.slice(5,7), 16)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return luminance > 0.5 ? '#000000' : '#ffffff'
   }
 
   const filteredEvents = events.filter(event => {
@@ -382,14 +456,6 @@ export default function DashboardPage() {
       (!filterDateRange.end || eventDate <= filterDateRange.end)
     return categoryMatch && dateMatch
   })
-
-  const getContrastColor = (hexcolor: string) => {
-    const r = parseInt(hexcolor.slice(1,3), 16)
-    const g = parseInt(hexcolor.slice(3,5), 16)
-    const b = parseInt(hexcolor.slice(5,7), 16)
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return luminance > 0.5 ? '#000000' : '#ffffff'
-  }
 
   const handleEditCategoryStart = (category: CalendarCategory) => {
     setEditingCategoryId(category.cc_id)
@@ -435,6 +501,24 @@ export default function DashboardPage() {
     }
   }
 
+  const handleSelectAllProductCategories = (checked: boolean) => {
+    if (checked) {
+      const allCategories = Array.from(new Set(productAlerts.map(item => item.pc_name)))
+      setSelectedProductCategories(allCategories.filter((category): category is string => category !== undefined))
+    } else {
+      setSelectedProductCategories([])
+    }
+  }
+
+  const handleSelectAllMaterialCategories = (checked: boolean) => {
+    if (checked) {
+      const allCategories = Array.from(new Set(materialAlerts.map(item => item.mc_name)))
+      setSelectedMaterialCategories(allCategories)
+    } else {
+      setSelectedMaterialCategories([])
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-black text-3xl font-bold mb-6">Dashboard</h1>
@@ -462,22 +546,13 @@ export default function DashboardPage() {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={handleDayClick}
+                  onSelect={(date) => date && handleDayClick(date)}
                   className="rounded-md bg-white"
-                  modifiers={{
-                    event: (date) => getEventsForDate(date).length > 0
-                  }}
-                  modifiersStyles={{
-                    event: {
-                      backgroundColor: 'transparent'
-                    }
-                  }}
                   components={{
-                    Day: ({ date, displayMonth, ...props }) => {
+                    Day: ({ date, ...props }) => {
                       const dateEvents = getEventsForDate(date)
                       const hasEvent = dateEvents.length > 0
-                      const isOutsideMonth = date.getMonth() !== displayMonth.getMonth()
-                      const isHovered = hoveredDate?.toDateString() === date.toDateString()
+                      const isOutsideMonth = date.getMonth() !== props.displayMonth?.getMonth()
                       return (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -487,32 +562,33 @@ export default function DashboardPage() {
                                 "w-8 h-8 p-0 font-normal aria-selected:opacity-100 rounded-md transition-colors",
                                 hasEvent && "text-white hover:opacity-80",
                                 !hasEvent && "hover:bg-gray-100",
-                                isOutsideMonth && "text-muted-foreground opacity-50",
-                                isHovered && "bg-blue-200"
+                                isOutsideMonth && "text-muted-foreground opacity-50"
                               )}
                               style={hasEvent ? { 
                                 backgroundColor: dateEvents[0].cc_hex,
-                                opacity: isHovered ? 1 : 0.8
                               } : {}}
                               onClick={(e) => {
                                 e.preventDefault()
-                                if (!isOutsideMonth) {
-                                  handleDayClick(date)
-                                }
+                                handleDayClick(date)
                               }}
-                              onMouseEnter={() => setHoveredDate(date)}
-                              onMouseLeave={() => setHoveredDate(null)}
                             >
                               {date.getDate()}
                             </button>
                           </TooltipTrigger>
-                          {hasEvent && !isOutsideMonth && (
-                            <TooltipContent className="bg-[#4A4A7C] border-none text-white">
+                          {hasEvent && (
+                            <TooltipContent className="p-0 overflow-hidden border-none">
                               {dateEvents.map((event, index) => (
-                                <div key={index} className="flex flex-col gap-1 mb-2">
+                                <div 
+                                  key={index} 
+                                  className="flex flex-col gap-1 p-2"
+                                  style={{
+                                    backgroundColor: event.cc_hex,
+                                    color: getContrastColor(event.cc_hex)
+                                  }}
+                                >
                                   <div className="font-semibold">{event.event_title}</div>
                                   <div className="text-sm">{event.event_subtitle}</div>
-                                  <div className="text-xs">{format(new Date(event.event_timestamp), 'p')}</div>
+                                  <div className="text-xs">{formatTime(event.event_timestamp)}</div>
                                 </div>
                               ))}
                             </TooltipContent>
@@ -571,7 +647,7 @@ export default function DashboardPage() {
                           <div className="font-medium">{event.event_title}</div>
                           <div className="text-xs opacity-80 mb-1">{event.event_subtitle || event.cc_name}</div>
                           <div className="text-sm opacity-80">
-                            {formatDate(event.event_timestamp)}
+                            {formatDate(event.event_timestamp)} at {formatTime(event.event_timestamp)}
                           </div>
                         </div>
                       </div>
@@ -600,7 +676,6 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="col-span-1 bg-[#4A4A7C] border-black border-lg">
           <CardHeader>
@@ -621,6 +696,19 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="grid gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="select-all-products"
+                          checked={selectedProductCategories.length === Array.from(new Set(productAlerts.map(item => item.pc_name))).length}
+                          onCheckedChange={handleSelectAllProductCategories}
+                        />
+                        <label
+                          htmlFor="select-all-products"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Select All
+                        </label>
+                      </div>
                       {Array.from(new Set(productAlerts.map(item => item.pc_name))).map((category) => (
                         <div key={category} className="flex items-center space-x-2">
                           <Checkbox 
@@ -690,19 +778,30 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="grid gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="select-all-materials"
+                          checked={selectedMaterialCategories.length === Array.from(new Set(materialAlerts.map(item => item.mc_name))).length}
+                          onCheckedChange={handleSelectAllMaterialCategories}
+                        />
+                        <label
+                          htmlFor="select-all-materials"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Select All
+                        </label>
+                      </div>
                       {Array.from(new Set(materialAlerts.map(item => item.mc_name))).map((category) => (
                         <div key={category} className="flex items-center space-x-2">
                           <Checkbox 
                             id={`material-${category}`} 
-                            checked={category ? selectedMaterialCategories.includes(category) : false}
+                            checked={selectedMaterialCategories.includes(category)}
                             onCheckedChange={(checked) => {
-                              if (category) {
-                                setSelectedMaterialCategories(prev => 
-                                  checked 
-                                    ? [...prev, category] 
-                                    : prev.filter(c => c !== category)
-                                )
-                              }
+                              setSelectedMaterialCategories(prev => 
+                                checked
+                                  ? [...prev, category] 
+                                  : prev.filter(c => c !== category)
+                              )
                             }}
                           />
                           <label
@@ -802,7 +901,13 @@ export default function DashboardPage() {
                       value={category.cc_id.toString()}
                       className="text-white focus:bg-white/20 focus:text-white"
                     >
-                      {category.cc_name}
+                      <div className="flex items-center">
+                        <div 
+                          className="w-4 h-4 rounded-full mr-2" 
+                          style={{ backgroundColor: category.cc_hex }}
+                        />
+                        {category.cc_name}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -815,8 +920,8 @@ export default function DashboardPage() {
               <Input
                 id="event-date"
                 type="datetime-local"
-                value={newEvent.event_timestamp?.slice(0, 16)}
-                onChange={(e) => setNewEvent({ ...newEvent, event_timestamp: new Date(e.target.value).toISOString() })}
+                value={newEvent.event_timestamp ? format(new Date(newEvent.event_timestamp), "yyyy-MM-dd'T'HH:mm") : ''}
+                onChange={handleDateTimeChange}
                 className="col-span-3 bg-white/10 border-white/20 text-white"
                 required
               />
@@ -856,7 +961,6 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       <Dialog open={isManagingCategories} onOpenChange={setIsManagingCategories}>
         <DialogContent className="sm:max-w-[425px] bg-[#4A4A7C] text-white border-none">
           <DialogHeader>
@@ -984,6 +1088,7 @@ export default function DashboardPage() {
             <p><strong>Subtitle:</strong> {selectedEvent?.event_subtitle}</p>
             <p><strong>Category:</strong> {selectedEvent?.cc_name}</p>
             <p><strong>Date:</strong> {selectedEvent && formatDate(selectedEvent.event_timestamp)}</p>
+            <p><strong>Time:</strong> {selectedEvent && formatTime(selectedEvent.event_timestamp)}</p>
             <p><strong>Notes:</strong> {selectedEvent?.event_notes}</p>
             {selectedEvent?.event_link && (
               <p><strong>Link:</strong> <a href={selectedEvent.event_link} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">{selectedEvent.event_link}</a></p>
