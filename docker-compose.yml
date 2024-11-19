@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   frontend:
     build:
@@ -5,11 +7,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
     volumes:
       - ./Frontend:/app
       - /app/node_modules
+    environment:
+      - NODE_ENV=development
     depends_on:
       - backend
 
@@ -19,13 +21,10 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_ENV=development
-      - FLASK_APP=main.py
-    env_file:
-      - ./Backend/.env
     volumes:
       - ./Backend:/app
+    env_file:
+      - ./Backend/.env
     depends_on:
       - db
 
@@ -33,11 +32,17 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: frostedfabrics
-      MYSQL_USER: ${dbusername}
-      MYSQL_PASSWORD: ${dbpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
+
+  cleanup:
+    image: docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: sh -c "docker image prune -f"
 
 volumes:
   mysql_data:
