@@ -104,6 +104,7 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
   const [isAddingBrand, setIsAddingBrand] = useState(false)
   const [isAddingMaterial, setIsAddingMaterial] = useState(false)
   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(null)
+  const [selectedMaterialId, setSelectedMaterialId] = useState<number | null>(null)
   const [newBrandData, setNewBrandData] = useState<NewBrandFormData>({
     brand_name: '',
     brand_price: '',
@@ -647,24 +648,22 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
         <div className="bg-white rounded-lg shadow overflow-x-auto flex-1 border border-gray-300">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-300">
-                <th className="p-2 text-gray-800 text-left font-semibold">Brand/Name</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">#</th>
-                <th className="p-2 text-gray-800 text-left font-semibold">
+              <tr className="bg-[#4A447C] text-white">
+                <th className="p-2 text-left font-semibold">Brand/Name</th>
+                <th className="p-2 text-left font-semibold">#</th>
+                <th className="p-2 text-left font-semibold">
                   Inv ({materials[0]?.meas_unit || 'units'})
                 </th>
                 {!isEditMode && !isPopup && (
-                  <th className="p-2 text-gray-800 text-left font-semibold">Quick Edit</th>
+                  <th className="p-2 text-left font-semibold">Quick Edit</th>
                 )}
-                <th className="p-2 text-gray-800 text-left font-semibold">
+                <th className="p-2 text-left font-semibold">
                   Alert ({materials[0]?.meas_unit || 'units'})
                 </th>
-                <th className="p-2 text-gray-800 text-left font-semibold">$</th>
-                {isPopup ? (
-                  <th className="p-2 text-gray-800 text-left font-semibold">Action</th>
-                ) : (
-                  <th className="p-2 text-gray-800 text-left font-semibold">Actions</th>
-                )}
+                <th className="p-2 text-left font-semibold">$</th>
+                <th className="p-2 text-left font-semibold">
+                  {isPopup ? 'Action' : 'Actions'}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -677,7 +676,11 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                 return (
                   <Fragment key={brandId}>
                     <tr 
-                      className="border-b border-gray-300 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                      className={`
+                        border-b border-gray-300 
+                        ${isExpanded ? 'bg-[#F3F0FF]' : 'bg-white'} 
+                        cursor-pointer hover:bg-[#F3F0FF]
+                      `}
                       onClick={() => toggleBrand(brandId)}
                     >
                       <td className="p-2">
@@ -759,10 +762,25 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                             </td>
                           </tr>
                         ) : (
-                          materialsForBrand.map((material) => {
+                          materialsForBrand.map((material, index) => {
                             const editedMaterial = editedMaterials[material.mat_id] || material
+                            const isSelected = selectedMaterialId === material.mat_id
                             return (
-                              <tr key={material.mat_id} className="border-b border-gray-300 last:border-b-0 bg-white">
+                              <tr 
+                                key={material.mat_id} 
+                                className={`
+                                  border-b border-gray-300 last:border-b-0
+                                  ${index % 2 === 0 ? 'bg-white' : 'bg-[#F3F0FF]'}
+                                  ${isSelected ? 'bg-[#4A447C]/10' : ''}
+                                  ${isPopup ? 'cursor-pointer hover:bg-[#4A447C]/5' : ''}
+                                `}
+                                onClick={() => {
+                                  if (isPopup && onSelectMaterial) {
+                                    setSelectedMaterialId(material.mat_id)
+                                    onSelectMaterial(material.mat_id)
+                                  }
+                                }}
+                              >
                                 <td className="p-2 pl-8 text-gray-800">
                                   {isEditMode ? (
                                     <Input
@@ -836,11 +854,19 @@ export default function CategoryPage({ category, categoryId, measurementId, isPo
                                 </td>
                                 <td className="p-2 text-gray-800"></td>
                                 {isPopup ? (
-                                  <td className="p-2 text-gray-800 hover:bg-[#4A447C] hover:text-white">
+                                  <td className="p-2">
                                     <Button 
                                       size="sm" 
-                                      variant="outline" 
-                                      onClick={() => onSelectMaterial && onSelectMaterial(material.mat_id)}
+                                      variant={isSelected ? "default" : "outline"}
+                                      className={`
+                                        ${isSelected 
+                                          ? 'bg-[#4A447C] text-white' 
+                                          : 'border-[#4A447C] text-[#4A447C] hover:bg-[#4A447C] hover:text-white'}
+                                      `}
+                                      onClick={() => {
+                                        setSelectedMaterialId(material.mat_id)
+                                        onSelectMaterial && onSelectMaterial(material.mat_id)
+                                      }}
                                     >
                                       Select
                                     </Button>
